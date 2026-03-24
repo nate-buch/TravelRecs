@@ -1,0 +1,16 @@
+import { StyleSheet, Text, View } from "react-native";
+
+export default function MapScreen() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Map</Text>
+      <Text style={styles.subtitle}>Your curated spots will appear here</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 28, fontWeight: "bold", marginBottom: 8 },
+  subtitle: { fontSize: 16, color: "#666" },
+});
