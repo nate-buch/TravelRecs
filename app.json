@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true
     },
+    
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -40,7 +41,13 @@
           }
         }
       ],
-      "@rnmapbox/maps"
+      "@rnmapbox/maps",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "TravelRecs needs your location to find great spots near you."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

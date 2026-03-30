@@ -1,5 +1,6 @@
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
-import { useRef, useState } from "react";
+import * as Location from "expo-location";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const MOCK_VENUE = {
@@ -11,6 +12,20 @@ const MOCK_VENUE = {
 export default function MapScreen() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [venueVisible, setVenueVisible] = useState(false);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [locationError, setLocationError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setLocationError("Location permission denied.");
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
+    })();
+  }, []);
 
   const openVenue = () => {
     setVenueVisible(true);
@@ -26,6 +41,17 @@ export default function MapScreen() {
     <View style={styles.container}>
       <View style={styles.mapPlaceholder}>
         <Text style={styles.mapText}>Map goes here</Text>
+
+        {location ? (
+          <Text style={styles.locationText}>
+            📍 {location.coords.latitude.toFixed(5)}, {location.coords.longitude.toFixed(5)}
+          </Text>
+        ) : locationError ? (
+          <Text style={styles.errorText}>{locationError}</Text>
+        ) : (
+          <Text style={styles.locationText}>Getting your location...</Text>
+        )}
+
         <TouchableOpacity style={styles.testButton} onPress={openVenue}>
           <Text style={styles.testButtonText}>Tap a venue (test)</Text>
         </TouchableOpacity>
@@ -67,6 +93,16 @@ const styles = StyleSheet.create({
   mapText: {
     fontSize: 18,
     color: "#999",
+    marginBottom: 12,
+  },
+  locationText: {
+    fontSize: 14,
+    color: "#555",
+    marginBottom: 24,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "red",
     marginBottom: 24,
   },
   testButton: {
