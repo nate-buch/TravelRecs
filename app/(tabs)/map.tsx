@@ -1,10 +1,13 @@
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
+import MapboxGL from "@rnmapbox/maps";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { generateItinerary } from "../config/claude";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { generateItinerary, Venue } from "../config/claude";
 import { usePreferencesStore } from "../config/store";
+
+MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
 const MOCK_VENUE = {
   name: "Bar Marsella",
@@ -17,7 +20,7 @@ export default function MapScreen() {
   const [venueVisible, setVenueVisible] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [locationError, setLocationError] = useState("");
-  const [itinerary, setItinerary] = useState("");
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,7 +42,6 @@ export default function MapScreen() {
     if (!location) return;
     setLoading(true);
     setError("");
-    setItinerary("");
     try {
       const result = await generateItinerary(
         location.coords.latitude,
@@ -49,7 +51,19 @@ export default function MapScreen() {
         budget || "flexible",
         notes
       );
-      setItinerary(result);
+      setVenues(result);
+
+      if (result.length > 0 && location) {
+        const lngs = [...result.map(v => v.longitude), location.coords.longitude];
+        const lats = [...result.map(v => v.latitude), location.coords.latitude];
+        cameraRef.current?.fitBounds(
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+          80,
+          500
+        );
+      }
+
     } catch (e) {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -67,55 +81,64 @@ export default function MapScreen() {
     bottomSheetRef.current?.close();
   };
 
+  const cameraRef = useRef<MapboxGL.Camera>(null);
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>Map</Text>
-
-        {location ? (
-          <Text style={styles.locationText}>
-            📍 {location.coords.latitude.toFixed(5)}, {location.coords.longitude.toFixed(5)}
-          </Text>
-        ) : locationError ? (
-          <Text style={styles.errorText}>{locationError}</Text>
-        ) : (
-          <Text style={styles.locationText}>Getting your location...</Text>
-        )}
-
-        {!time && !pace && !budget && (
-          <TouchableOpacity
-            style={styles.nudgeBanner}
-            onPress={() => router.push("/(tabs)/preferences")}
+      <MapboxGL.MapView style={styles.map}>
+        <MapboxGL.Camera
+          ref={cameraRef}
+          zoomLevel={14}
+          centerCoordinate={
+            location
+              ? [location.coords.longitude, location.coords.latitude]
+              : [-97.7431, 30.2672]
+          }
+        />
+        {location && (
+          <MapboxGL.PointAnnotation
+            id="userLocation"
+            coordinate={[location.coords.longitude, location.coords.latitude]}
           >
-            <Text style={styles.nudgeText}>
-              ⚙️ No preferences set — tap here to customize your itinerary
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.marker} />
+          </MapboxGL.PointAnnotation>
         )}
+        {venues.map((venue, index) => (
+          <MapboxGL.PointAnnotation
+            key={`venue-${index}`}
+            id={`venue-${index}`}
+            coordinate={[venue.longitude, venue.latitude]}
+          >
+            <View style={styles.venueMarker} />
+          </MapboxGL.PointAnnotation>
+        ))}
+      </MapboxGL.MapView>
 
+    <View style={styles.overlayContainer}>
+
+      {!time && !pace && !budget && (
         <TouchableOpacity
-          style={[styles.generateButton, (!location || loading) && styles.buttonDisabled]}
-          onPress={handleGenerate}
-          disabled={!location || loading}
+          style={styles.nudgeBanner}
+          onPress={() => router.push("/(tabs)/preferences")}
         >
-          <Text style={styles.generateButtonText}>
-            {loading ? "Generating..." : "Generate itinerary"}
+          <Text style={styles.nudgeText}>
+            ⚙️ No preferences set — tap here to customize your itinerary
           </Text>
         </TouchableOpacity>
+      )}
 
-        <TouchableOpacity style={styles.testButton} onPress={openVenue}>
-          <Text style={styles.testButtonText}>Test venue card</Text>
-        </TouchableOpacity>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        {itinerary ? (
-          <View style={styles.itineraryBox}>
-            <Text style={styles.itineraryTitle}>Your curated itinerary</Text>
-            <Text style={styles.itineraryText}>{itinerary}</Text>
-          </View>
-        ) : null}
-      </ScrollView>
+      <TouchableOpacity
+        style={[styles.generateButton, (!location || loading) && styles.buttonDisabled]}
+        onPress={handleGenerate}
+        disabled={!location || loading}
+      >
+        <Text style={styles.generateButtonText}>
+          {loading ? "Generating..." : "Generate itinerary"}
+        </Text>
+      </TouchableOpacity>
+    </View>
 
       <BottomSheet
         ref={bottomSheetRef}
@@ -142,56 +165,69 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 24, paddingBottom: 48 },
-  heading: { fontSize: 28, fontWeight: "bold", marginBottom: 12 },
-  locationText: { fontSize: 14, color: "#555", marginBottom: 24 },
-  errorText: { fontSize: 14, color: "red", marginBottom: 16 },
-  generateButton: {
+  map: { flex: 1 },
+  marker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: "#000",
-    padding: 18,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
-  buttonDisabled: { backgroundColor: "#ccc" },
-  generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  testButton: {
-    borderWidth: 1.5,
-    borderColor: "#000",
-    padding: 14,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 24,
+  overlayContainer: {
+    position: "absolute",
+    bottom: 100,
+    left: 16,
+    right: 16,
+    maxHeight: "70%",
   },
-  testButtonText: { fontSize: 15, fontWeight: "600", color: "#000" },
   itineraryBox: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 14,
-    padding: 20,
+  backgroundColor: "rgba(255,255,255,0.95)",
+  borderRadius: 14,
+  padding: 16,
+  marginBottom: 10,
+  maxHeight: 300,
+  overflow: "scroll",
   },
-  itineraryTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
+  venueMarker: {
+  width: 14,
+  height: 14,
+  borderRadius: 7,
+  backgroundColor: "#e63946",
+  borderWidth: 2,
+  borderColor: "#fff",
   },
   nudgeBanner: {
-  backgroundColor: "#fff8e1",
-  borderWidth: 1.5,
-  borderColor: "#f0c040",
-  borderRadius: 12,
-  padding: 14,
-  marginBottom: 16,
+    backgroundColor: "#fff8e1",
+    borderWidth: 1.5,
+    borderColor: "#f0c040",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
   },
   nudgeText: {
     fontSize: 14,
     color: "#7a6000",
     textAlign: "center",
   },
-  itineraryText: {
-    fontSize: 15,
-    color: "#333",
-    lineHeight: 24,
+  generateButton: {
+    backgroundColor: "#000",
+    padding: 18,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 10,
   },
+  buttonDisabled: { backgroundColor: "#ccc" },
+  generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  errorText: { fontSize: 14, color: "red", marginBottom: 10 },
+  itineraryBox: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 14,
+    padding: 16,
+    maxHeight: 200,
+  },
+  itineraryTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
+  itineraryText: { fontSize: 14, color: "#333", lineHeight: 22 },
   sheetContent: { padding: 24 },
   venueName: { fontSize: 22, fontWeight: "bold", marginBottom: 8 },
   venueJustification: { fontSize: 15, color: "#444", lineHeight: 22, marginBottom: 16 },

@@ -1,3 +1,11 @@
+export type Venue = {
+  name: string;
+  latitude: number;
+  longitude: number;
+  justification: string;
+  hours: string;
+};
+
 export const generateItinerary = async (
   latitude: number,
   longitude: number,
@@ -5,7 +13,7 @@ export const generateItinerary = async (
   pace: string,
   budget: string,
   notes: string
-) => {
+): Promise<Venue[]> => {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -27,17 +35,25 @@ Their preferences:
 - Budget: ${budget}
 - Notes: ${notes || "None"}
 
-Return a curated list of 5 nearby places worth visiting for this specific traveler. For each place include:
-1. Name
-2. One sentence justification tailored to their preferences
-3. Typical hours
+Return a curated list of 5 nearby places worth visiting for this specific traveler.
 
-Format as a simple numbered list.`,
+You MUST respond with ONLY a valid JSON array, no other text. Example format:
+[
+  {
+    "name": "Place Name",
+    "latitude": 12.3456,
+    "longitude": 12.3456,
+    "justification": "One sentence tailored to their preferences",
+    "hours": "Mon-Sat: 9am-5pm"
+  }
+]`,
         },
       ],
     }),
   });
 
   const data = await response.json();
-  return data.content[0].text;
+  const text = data.content[0].text;
+  const clean = text.replace(/\`\`\`json|\`\`\`/g, "").trim();
+  return JSON.parse(clean) as Venue[];
 };
