@@ -5,10 +5,10 @@ import { loadPreferences, savePreferences } from "../config/preferences";
 import { usePreferencesStore } from "../config/store";
 
 const TIME_OPTIONS = [
-  { id: "layover", label: "A few hours", desc: "Must-sees + one great local meal" },
-  { id: "day", label: "A full day", desc: "Balanced mix, some wandering" },
-  { id: "weekend", label: "A weekend", desc: "Relaxed pace, deeper cuts" },
-  { id: "week", label: "A week+", desc: "Off the beaten path, local rhythm" },
+  { id: "layover", label: "A few hours", desc: "Must-sees and quick local bites" },
+  { id: "day", label: "A full day", desc: "Balanced mix, some exploring" },
+  { id: "weekend", label: "A weekend", desc: "Relaxed pace, hidden gems" },
+  { id: "week", label: "A week+", desc: "Off-the-beaten-path points of interest" },
 ];
 
 const PACE_OPTIONS = [
@@ -18,7 +18,7 @@ const PACE_OPTIONS = [
 ];
 
 const BUDGET_OPTIONS = [
-  { id: "cheap", label: "Keep it cheap!", desc: "Parks, street food, free entry. Splurge only for once-in-a-lifetime." },
+  { id: "cheap", label: "Keep it cheap!", desc: "Parks, street food, free entry. Splurge only for once-in-a-lifetime must-dos." },
   { id: "flexible", label: "Flexible for the right things!", desc: "Mid-range meals, paid attractions, faster transit if needed." },
   { id: "vacay", label: "I'm on vacay — make the most of it!", desc: "Tours, great dining, VIP entry — no regrets." },
 ];

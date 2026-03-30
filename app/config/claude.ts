@@ -52,8 +52,15 @@ You MUST respond with ONLY a valid JSON array, no other text. Example format:
     }),
   });
 
-  const data = await response.json();
-  const text = data.content[0].text;
-  const clean = text.replace(/\`\`\`json|\`\`\`/g, "").trim();
-  return JSON.parse(clean) as Venue[];
+    const data = await response.json();
+    if (data.type === "error") {
+    throw new Error(data.error.message);
+    }
+    const text = data.content[0].text;
+    const clean = text.replace(/```json|```/g, "").trim();
+    try {
+    return JSON.parse(clean) as Venue[];
+    } catch {
+    throw new Error("Failed to parse itinerary. Please try again.");
+    }
 };

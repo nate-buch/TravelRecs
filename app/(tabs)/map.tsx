@@ -15,6 +15,31 @@ const MOCK_VENUE = {
   hours: "Mon–Sat: 7pm–2am, Closed Sunday",
 };
 
+const LOADING_MESSAGES = [
+  "Incorporating your preferences...",
+  "Curating recommendations...",
+  "Optimizing travel flow...",
+  "Finalizing itinerary...",
+];
+
+function LoadingMessage() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (index >= LOADING_MESSAGES.length - 1) return;
+    const timer = setTimeout(() => {
+      setIndex(i => i + 1);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [index]);
+
+  return (
+    <View style={styles.loadingOverlay}>
+      <Text style={styles.loadingText}>{LOADING_MESSAGES[index]}</Text>
+    </View>
+  );
+}
+
 export default function MapScreen() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [venueVisible, setVenueVisible] = useState(false);
@@ -116,6 +141,14 @@ export default function MapScreen() {
 
     <View style={styles.overlayContainer}>
 
+      {!location && !locationError && (
+        <View style={styles.gpsLoading}>
+          <Text style={styles.gpsLoadingText}>📍 Getting your location...</Text>
+        </View>
+      )}
+
+      {loading && <LoadingMessage />}
+
       {!time && !pace && !budget && (
         <TouchableOpacity
           style={styles.nudgeBanner}
@@ -128,6 +161,14 @@ export default function MapScreen() {
       )}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      {!loading && venues.length === 0 && location && time && pace && budget && (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>
+            Tap "Generate itinerary" to find great spots nearby!
+          </Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={[styles.generateButton, (!location || loading) && styles.buttonDisabled]}
@@ -216,6 +257,42 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     marginBottom: 10,
+  },
+  emptyState: {
+  backgroundColor: "rgba(255,255,255,0.95)",
+  borderRadius: 12,
+  padding: 16,
+  marginBottom: 10,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#555",
+    textAlign: "center",
+  },
+  gpsLoading: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    alignItems: "center",
+  },
+  gpsLoadingText: {
+    fontSize: 14,
+    color: "#555",
+  },
+  loadingOverlay: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  loadingText: {
+    fontSize: 15,
+    color: "#555",
+    fontStyle: "italic",
   },
   buttonDisabled: { backgroundColor: "#ccc" },
   generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
