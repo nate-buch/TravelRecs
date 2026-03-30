@@ -1,12 +1,25 @@
 import { router } from "expo-router";
+import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { loadPreferences } from "./config/preferences";
+import { usePreferencesStore } from "./config/store";
 
 export default function Index() {
+  const setPreferences = usePreferencesStore(state => state.setPreferences);
+
+  useEffect(() => {
+    (async () => {
+      const saved = await loadPreferences();
+      if (saved) {
+        setPreferences(saved.time, saved.pace, saved.budget, saved.notes);
+      }
+    })();
+  }, []);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>TravelRecs</Text>
       <Text style={styles.subtitle}>Your curated travel companion</Text>
-
       <View style={styles.buttons}>
         <TouchableOpacity
           style={[styles.button, styles.primaryButton]}
@@ -14,7 +27,6 @@ export default function Index() {
         >
           <Text style={styles.primaryButtonText}>Resume active itinerary</Text>
         </TouchableOpacity>
-
         <TouchableOpacity
           style={[styles.button, styles.secondaryButton]}
           onPress={() => router.push("/(tabs)/map")}

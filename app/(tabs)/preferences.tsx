@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { loadPreferences, savePreferences } from "../config/preferences";
 import { usePreferencesStore } from "../config/store";
 
 const TIME_OPTIONS = [
@@ -47,6 +48,18 @@ export default function PreferencesScreen() {
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
   const setPreferences = usePreferencesStore(state => state.setPreferences);
+
+  useEffect(() => {
+    (async () => {
+      const saved = await loadPreferences();
+      if (saved) {
+        setTime(saved.time);
+        setPace(saved.pace);
+        setBudget(saved.budget);
+        setNotes(saved.notes);
+      }
+    })();
+  }, []);
 
   const canSave = time && pace && budget;
 
@@ -95,7 +108,8 @@ export default function PreferencesScreen() {
       <TouchableOpacity
         style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
         disabled={!canSave}
-        onPress={() => {
+        onPress={async () => {
+          await savePreferences(time, pace, budget, notes);
           setPreferences(time, pace, budget, notes);
           router.push("/(tabs)/map");
         }}
