@@ -1,5 +1,7 @@
+import { router } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { usePreferencesStore } from "../config/store";
 
 const TIME_OPTIONS = [
   { id: "layover", label: "A few hours", desc: "Must-sees + one great local meal" },
@@ -44,6 +46,7 @@ export default function PreferencesScreen() {
   const [pace, setPace] = useState("");
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
+  const setPreferences = usePreferencesStore(state => state.setPreferences);
 
   const canSave = time && pace && budget;
 
@@ -92,8 +95,12 @@ export default function PreferencesScreen() {
       <TouchableOpacity
         style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
         disabled={!canSave}
+        onPress={() => {
+          setPreferences(time, pace, budget, notes);
+          router.push("/(tabs)/map");
+        }}
       >
-        <Text style={styles.saveButtonText}>Generate my itinerary</Text>
+        <Text style={styles.saveButtonText}>Save preferences</Text>
       </TouchableOpacity>
 
     </ScrollView>
