@@ -5,15 +5,10 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { generateItinerary, Venue } from "../config/claude";
+import { getNearbyPlaces } from "../config/places";
 import { usePreferencesStore } from "../config/store";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
-
-const MOCK_VENUE = {
-  name: "Bar Marsella",
-  justification: "Oldest bar in Barcelona, unchanged since 1820. A must for anyone who appreciates living history over tourist traps.",
-  hours: "Mon–Sat: 7pm–2am, Closed Sunday",
-};
 
 const LOADING_MESSAGES = [
   "Incorporating your preferences...",
@@ -67,17 +62,22 @@ export default function MapScreen() {
     if (!location) return;
     setLoading(true);
     setError("");
+    setVenues([]);
     try {
+      const nearbyPlaces = await getNearbyPlaces(
+        location.coords.latitude,
+        location.coords.longitude
+      );
       const result = await generateItinerary(
         location.coords.latitude,
         location.coords.longitude,
         time || "a full day",
         pace || "well-paced",
         budget || "flexible",
-        notes
+        notes,
+        nearbyPlaces
       );
       setVenues(result);
-
       if (result.length > 0 && location) {
         const lngs = [...result.map(v => v.longitude), location.coords.longitude];
         const lats = [...result.map(v => v.latitude), location.coords.latitude];
@@ -88,9 +88,8 @@ export default function MapScreen() {
           500
         );
       }
-
-    } catch (e) {
-      setError("Something went wrong. Please try again.");
+    } catch (e: any) {
+      setError(e.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -107,6 +106,8 @@ export default function MapScreen() {
   };
 
   const cameraRef = useRef<MapboxGL.Camera>(null);
+
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
 
   return (
     <View style={styles.container}>
@@ -133,6 +134,11 @@ export default function MapScreen() {
             key={`venue-${index}`}
             id={`venue-${index}`}
             coordinate={[venue.longitude, venue.latitude]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            onSelected={() => {
+              setSelectedVenue(venue);
+              bottomSheetRef.current?.expand();
+            }}
           >
             <View style={styles.venueMarker} />
           </MapboxGL.PointAnnotation>
@@ -189,11 +195,11 @@ export default function MapScreen() {
         onClose={closeVenue}
       >
         <BottomSheetView style={styles.sheetContent}>
-          <Text style={styles.venueName}>{MOCK_VENUE.name}</Text>
-          <Text style={styles.venueJustification}>{MOCK_VENUE.justification}</Text>
+          <Text style={styles.venueName}>{selectedVenue?.name}</Text>
+          <Text style={styles.venueJustification}>{selectedVenue?.justification}</Text>
           <View style={styles.hoursRow}>
             <Text style={styles.hoursLabel}>Hours  </Text>
-            <Text style={styles.hoursValue}>{MOCK_VENUE.hours}</Text>
+            <Text style={styles.hoursValue}>{selectedVenue?.hours}</Text>
           </View>
           <TouchableOpacity style={styles.moreButton}>
             <Text style={styles.moreButtonText}>More info</Text>
