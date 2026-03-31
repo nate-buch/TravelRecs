@@ -135,11 +135,5 @@ export const optimizeRoute = (
   const optimized = twoOpt(first.latitude, first.longitude, nn);
   const checked = sanityCheck(optimized);
 
-    console.log("First stop:", first.name);
-    console.log("Rest before optimize:", rest.map(v => v.name));
-    console.log("After nearest neighbor:", nn.map(v => v.name));
-    console.log("After 2-opt:", optimized.map(v => v.name));
-    console.log("After sanity check:", checked.map(v => v.name));
-
   return [first, ...checked];
 };

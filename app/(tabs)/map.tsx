@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { generateItinerary, Venue } from "../config/claude";
+import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
 import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute } from "../config/routing";
@@ -138,28 +139,15 @@ export default function MapScreen() {
         />
 
         {location && (
-          <MapboxGL.PointAnnotation
-            id="userLocation"
+          <MapboxGL.MarkerView
             coordinate={[location.coords.longitude, location.coords.latitude]}
-          >
-            <View style={styles.marker} />
-          </MapboxGL.PointAnnotation>
-        )}
-
-        {venues.map((venue, index) => (
-          <MapboxGL.PointAnnotation
-            key={`venue-${index}`}
-            id={`venue-${index}`}
-            coordinate={[venue.longitude, venue.latitude]}
             anchor={{ x: 0.5, y: 0.5 }}
-            onSelected={() => {
-              setSelectedVenue(venue);
-              bottomSheetRef.current?.expand();
-            }}
           >
-            <View style={styles.venueMarker} />
-          </MapboxGL.PointAnnotation>
-        ))}
+            <View style={styles.userMarker}>
+              <Text style={styles.userMarkerText}>YOU ARE HERE</Text>
+            </View>
+          </MapboxGL.MarkerView>
+        )}
 
         {routeLegs.map((leg, index) => (
           <MapboxGL.ShapeSource
@@ -174,52 +162,112 @@ export default function MapScreen() {
               properties: {},
             }}
           >
-            
             <MapboxGL.LineLayer
               id={`leg-line-${index}`}
               style={{
-                lineColor: "#000",
+                lineColor: LEG_COLORS[index % LEG_COLORS.length],
                 lineWidth: 3,
                 lineDasharray: [2, 2],
               }}
             />
           </MapboxGL.ShapeSource>
-        ))}        
+        ))}
 
-        {routeLegs.map((leg, index) => {
-          const midIndex = Math.floor(leg.walkingCoordinates.length / 2);
-          const midpoint = leg.walkingCoordinates[midIndex];
+        {routeLegs.length > 0 && (
+          <MapboxGL.ShapeSource
+            id="legLabels"
+            shape={{
+              type: "FeatureCollection",
+              features: routeLegs.map((leg, index) => {
+                const venue = venues[index];
+                if (!venue) return null;
+                return {
+                  type: "Feature",
+                  geometry: {
+                    type: "Point",
+                    coordinates: [venue.longitude, venue.latitude],
+                  },
+                  properties: {
+                    label: `Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `\nDrive: ${leg.drivingDuration} min` : ""}`,
+                    color: LEG_COLORS[index % LEG_COLORS.length],
+                  },
+                };
+              }).filter(Boolean),
+            }}
+          >
+            <MapboxGL.SymbolLayer
+              id="legLabelsLayer"
+                style={{
+                  textField: ["get", "label"],
+                  textSize: 12,
+                  textColor: ["get", "color"],
+                  textHaloColor: "#ffffff",
+                  textHaloWidth: 2,
+                  textAnchor: "top",
+                  textOffset: [0, 1.5],
+                  symbolSortKey: 1,
+                  textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
+                  textMaxWidth: 8,
+                }}
+            />
+          </MapboxGL.ShapeSource>
+        )}
 
-          // Calculate bearing of the leg to offset perpendicularly
-          const start = leg.walkingCoordinates[0];
-          const end = leg.walkingCoordinates[leg.walkingCoordinates.length - 1];
-          const dx = end[0] - start[0];
-          const dy = end[1] - start[1];
-          const len = Math.sqrt(dx * dx + dy * dy);
-          const perpX = len > 0 ? -dy / len : 0;
-          const perpY = len > 0 ? dx / len : 0;
-          const offsetAmount = 0.0002;
-
-          const offsetCoordinate: [number, number] = [
-            midpoint[0] + perpX * offsetAmount,
-            midpoint[1] + perpY * offsetAmount,
-          ];
-          return (
-            <MapboxGL.PointAnnotation
-              key={`leg-label-${index}`}
-              id={`leg-label-${index}`}
-              coordinate={offsetCoordinate}
-              anchor={{ x: 0.5, y: 0.5 }}
+        {venues.map((venue, index) => (
+          <MapboxGL.MarkerView
+            key={`venue-${index}`}
+            coordinate={[venue.longitude, venue.latitude]}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <TouchableOpacity
+              style={[styles.venueMarker, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}
+              onPress={() => {
+                setSelectedVenue(venue);
+                bottomSheetRef.current?.expand();
+              }}
             >
-              <View style={styles.legLabel}>
-                <Text style={styles.legLabelText}>
-                  🚶 {leg.walkingDuration} min
-                  {leg.drivingDuration ? `  🚗 ${leg.drivingDuration} min` : ""}
-                </Text>
-              </View>
-            </MapboxGL.PointAnnotation>
-          );
-        })}
+              <Text style={styles.venueMarkerText}>{index + 1}</Text>
+            </TouchableOpacity>
+          </MapboxGL.MarkerView>
+        ))}
+
+        {venues.length > 0 && (
+          <MapboxGL.ShapeSource
+            id="venueNames"
+            shape={{
+              type: "FeatureCollection",
+              features: venues.map((venue, index) => ({
+                type: "Feature",
+                geometry: {
+                  type: "Point",
+                  coordinates: [venue.longitude, venue.latitude],
+                },
+                properties: {
+                  name: venue.name,
+                  color: LEG_COLORS[index % LEG_COLORS.length],
+                },
+              })),
+            }}
+          >
+            <MapboxGL.SymbolLayer
+              id="venueNamesLayer"
+              style={{
+                textField: ["get", "name"],
+                textSize: 16,
+                textColor: ["get", "color"],
+                textHaloColor: "#ffffff",
+                textHaloWidth: 2,
+                textAnchor: "bottom",
+                textOffset: [0, -1.0],
+                textMaxWidth: 10,
+                textAllowOverlap: true,
+                textIgnorePlacement: true,
+                symbolSortKey: 3,
+                textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+              }}
+            />
+          </MapboxGL.ShapeSource>
+        )}
 
       </MapboxGL.MapView>
 
@@ -301,7 +349,7 @@ const styles = StyleSheet.create({
   },
   overlayContainer: {
     position: "absolute",
-    bottom: 100,
+    bottom: 10,
     left: 16,
     right: 16,
     maxHeight: "70%",
@@ -314,13 +362,53 @@ const styles = StyleSheet.create({
   maxHeight: 300,
   overflow: "scroll",
   },
-  venueMarker: {
-  width: 14,
-  height: 14,
-  borderRadius: 7,
-  backgroundColor: "#e63946",
+  userMarker: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  backgroundColor: "#333",
   borderWidth: 2,
   borderColor: "#fff",
+  justifyContent: "center",
+  alignItems: "center",
+  },
+  userMarkerText: {
+    fontSize: 5,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+  },
+  venueMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  venueMarkerText: {
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: "bold",
+  },
+  venueMarkerContainer: {
+  alignItems: "center",
+  },
+  venueNameLabel: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    maxWidth: 120,
+  },
+  venueNameLabelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    textAlign: "center",
   },
   nudgeBanner: {
     backgroundColor: "#fff8e1",
@@ -379,19 +467,17 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   legLabel: {
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginBottom: 30,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    padding: 4,
   },
   legLabelText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#333",
-  },  
+    textShadowColor: "#fff",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
   buttonDisabled: { backgroundColor: "#ccc" },
   generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   errorText: { fontSize: 14, color: "red", marginBottom: 10 },

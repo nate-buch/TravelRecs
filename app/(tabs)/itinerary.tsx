@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { LEG_COLORS } from "../config/colors";
 import { useAppStore } from "../config/store";
 
 export default function ItineraryScreen() {
@@ -44,7 +45,7 @@ export default function ItineraryScreen() {
 
       {venues.map((venue, index) => (
         <View key={index} style={styles.venueCard}>
-          <View style={styles.venueNumber}>
+          <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}>
             <Text style={styles.venueNumberText}>{index + 1}</Text>
           </View>
           <View style={styles.venueContent}>
