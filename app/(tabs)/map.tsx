@@ -5,7 +5,9 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { generateItinerary, Venue } from "../config/claude";
+import { getRouteLegs } from "../config/directions";
 import { getNearbyPlaces } from "../config/places";
+import { optimizeRoute } from "../config/routing";
 import { useAppStore } from "../config/store";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
@@ -43,7 +45,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { time, pace, budget, notes, venues, setVenues } = useAppStore();
+  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs } = useAppStore();
 
   useEffect(() => {
     (async () => {
@@ -62,6 +64,7 @@ export default function MapScreen() {
     setLoading(true);
     setError("");
     setVenues([]);
+    setRouteLegs([]);
     try {
       const nearbyPlaces = await getNearbyPlaces(
         location.coords.latitude,
@@ -76,7 +79,19 @@ export default function MapScreen() {
         notes,
         nearbyPlaces
       );
-      setVenues(result);
+
+      const optimized = optimizeRoute(
+        location.coords.latitude,
+        location.coords.longitude,
+        result
+      );
+      setVenues(optimized);
+      const legs = await getRouteLegs(
+        [location.coords.longitude, location.coords.latitude],
+        optimized
+      );
+      setRouteLegs(legs);
+
       if (result.length > 0 && location) {
         const lngs = [...result.map(v => v.longitude), location.coords.longitude];
         const lats = [...result.map(v => v.latitude), location.coords.latitude];
@@ -111,6 +126,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <MapboxGL.MapView style={styles.map}>
+
         <MapboxGL.Camera
           ref={cameraRef}
           zoomLevel={14}
@@ -120,6 +136,7 @@ export default function MapScreen() {
               : [-97.7431, 30.2672]
           }
         />
+
         {location && (
           <MapboxGL.PointAnnotation
             id="userLocation"
@@ -128,6 +145,7 @@ export default function MapScreen() {
             <View style={styles.marker} />
           </MapboxGL.PointAnnotation>
         )}
+
         {venues.map((venue, index) => (
           <MapboxGL.PointAnnotation
             key={`venue-${index}`}
@@ -142,6 +160,67 @@ export default function MapScreen() {
             <View style={styles.venueMarker} />
           </MapboxGL.PointAnnotation>
         ))}
+
+        {routeLegs.map((leg, index) => (
+          <MapboxGL.ShapeSource
+            key={`leg-${index}`}
+            id={`leg-${index}`}
+            shape={{
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: leg.walkingCoordinates,
+              },
+              properties: {},
+            }}
+          >
+            
+            <MapboxGL.LineLayer
+              id={`leg-line-${index}`}
+              style={{
+                lineColor: "#000",
+                lineWidth: 3,
+                lineDasharray: [2, 2],
+              }}
+            />
+          </MapboxGL.ShapeSource>
+        ))}        
+
+        {routeLegs.map((leg, index) => {
+          const midIndex = Math.floor(leg.walkingCoordinates.length / 2);
+          const midpoint = leg.walkingCoordinates[midIndex];
+
+          // Calculate bearing of the leg to offset perpendicularly
+          const start = leg.walkingCoordinates[0];
+          const end = leg.walkingCoordinates[leg.walkingCoordinates.length - 1];
+          const dx = end[0] - start[0];
+          const dy = end[1] - start[1];
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const perpX = len > 0 ? -dy / len : 0;
+          const perpY = len > 0 ? dx / len : 0;
+          const offsetAmount = 0.0002;
+
+          const offsetCoordinate: [number, number] = [
+            midpoint[0] + perpX * offsetAmount,
+            midpoint[1] + perpY * offsetAmount,
+          ];
+          return (
+            <MapboxGL.PointAnnotation
+              key={`leg-label-${index}`}
+              id={`leg-label-${index}`}
+              coordinate={offsetCoordinate}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.legLabel}>
+                <Text style={styles.legLabelText}>
+                  🚶 {leg.walkingDuration} min
+                  {leg.drivingDuration ? `  🚗 ${leg.drivingDuration} min` : ""}
+                </Text>
+              </View>
+            </MapboxGL.PointAnnotation>
+          );
+        })}
+
       </MapboxGL.MapView>
 
     <View style={styles.overlayContainer}>
@@ -299,6 +378,20 @@ const styles = StyleSheet.create({
     color: "#555",
     fontStyle: "italic",
   },
+  legLabel: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    marginBottom: 30,
+  },
+  legLabelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },  
   buttonDisabled: { backgroundColor: "#ccc" },
   generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   errorText: { fontSize: 14, color: "red", marginBottom: 10 },

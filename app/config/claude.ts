@@ -7,6 +7,7 @@ export type Venue = {
   justification: string;
   hours: string;
   address: string;
+  types?: string[];
 };
 
 export const generateItinerary = async (
@@ -41,7 +42,7 @@ export const generateItinerary = async (
       messages: [
         {
           role: "user",
-          content: `You are a local expert travel curator. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
+content: `You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
 
 Their preferences:
 - Time available: ${time}
@@ -52,18 +53,38 @@ Their preferences:
 Here are real nearby places from Google Places:
 ${placesList}
 
-From this list, select the 5-8 best stops for this specific traveler. Consider:
-- Current time and opening hours
-- Logical geographic order to minimize travel
-- The user's pace and budget preferences
-- A good mix of experiences
+Your job is to select and ORDER several stops for an optimized day itinerary. Follow these rules strictly:
 
-You MUST respond with ONLY a valid JSON array of venue names, no other text. Example format:
+ROUTING RULES:
+- Order stops to minimize total travel distance — avoid criss-crossing or backtracking as much as possible
+- Strongly lean toward grouping nearby stops together
+
+SEQUENCE RULES:
+- Follow a logical progression: daytime activities → dinner → drinks/nightlife
+- Never place nightlife before a sit-down meal; late-night food can come after drinks but not before
+- Never place live music venues before dinner unless it's a daytime show
+
+TIMING RULES:
+- Current time is ${currentTime} — only recommend stops that make sense from now onwards
+- Breakfast spots → morning only (before 11am)
+- Lunch restaurants → around 11:00am-2:00pm
+- Museums, galleries, attractions → daytime (9am-6pm), and cross-check their days and hours of operation
+- Bars, cocktail lounges, nightlife → after 5pm
+- Parks and outdoor spots → daytime, avoid if near closing
+- If a venue is likely closed now, or will be by the time the user reaches it, skip it
+
+DIVERSITY RULES:
+- Avoid placing two sit-down food establishments back to back
+- Small bites, cafes, and street food are more flexible and can be interspersed anywhere
+- Mix venue types where possible — alternate between activity/attraction types to create a dynamic day of experiences
+- Consider when the user would be eating, and avoid recommending another food stop immediately after — they might want to walk or do an activity in between
+
+You MUST respond with ONLY a valid JSON array in visit order, no other text:
 [
   {
     "name": "Exact venue name from the list above",
-    "justification": "One sentence tailored to their preferences",
-    "hours": "Mon-Sat: 9am-5pm"
+    "justification": "One sentence tailored to their preferences and why NOW is a good time to visit",
+    "hours": "Opening hours if known, otherwise Verify before visiting"
   }
 ]`,
         },
@@ -77,20 +98,22 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   }
   const text = data.content[0].text;
   const clean = text.replace(/```json|```/g, "").trim();
-    try {
-    const parsed = JSON.parse(clean) as { name: string; justification: string; hours: string }[];
-    return parsed.map(item => {
-        const match = nearbyPlaces.find(p => p.name === item.name);
-        return {
-        name: item.name,
-        latitude: match?.latitude ?? 0,
-        longitude: match?.longitude ?? 0,
-        address: match?.address ?? "",
-        justification: item.justification,
-        hours: item.hours,
-        };
-    }).filter(v => v.latitude !== 0);
-    } catch {
-    throw new Error("Failed to parse itinerary. Please try again.");
-    }
+  
+        try {
+        const parsed = JSON.parse(clean) as { name: string; justification: string; hours: string }[];
+        return parsed.map(item => {
+            const match = nearbyPlaces.find(p => p.name === item.name);
+            return {
+            name: item.name,
+            latitude: match?.latitude ?? 0,
+            longitude: match?.longitude ?? 0,
+            address: match?.address ?? "",
+            justification: item.justification,
+            hours: item.hours,
+            types: match?.types ?? [],
+            };
+        }).filter(v => v.latitude !== 0);
+        } catch {
+        throw new Error("Failed to parse itinerary. Please try again.");
+        }
 };
