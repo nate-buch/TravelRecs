@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { generateItinerary, Venue } from "../config/claude";
 import { getNearbyPlaces } from "../config/places";
-import { usePreferencesStore } from "../config/store";
+import { useAppStore } from "../config/store";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
@@ -40,11 +40,10 @@ export default function MapScreen() {
   const [venueVisible, setVenueVisible] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [locationError, setLocationError] = useState("");
-  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { time, pace, budget, notes } = usePreferencesStore();
+  const { time, pace, budget, notes, venues, setVenues } = useAppStore();
 
   useEffect(() => {
     (async () => {

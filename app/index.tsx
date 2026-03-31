@@ -2,10 +2,10 @@ import { router } from "expo-router";
 import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { loadPreferences } from "./config/preferences";
-import { usePreferencesStore } from "./config/store";
+import { useAppStore } from "./config/store";
 
 export default function Index() {
-  const setPreferences = usePreferencesStore(state => state.setPreferences);
+  const setPreferences = useAppStore(state => state.setPreferences);
 
   useEffect(() => {
     (async () => {

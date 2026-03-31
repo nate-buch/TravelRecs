@@ -2,25 +2,25 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { loadPreferences, savePreferences } from "../config/preferences";
-import { usePreferencesStore } from "../config/store";
+import { useAppStore } from "../config/store";
 
 const TIME_OPTIONS = [
-  { id: "layover", label: "A few hours", desc: "Must-sees and quick local bites" },
-  { id: "day", label: "A full day", desc: "Balanced mix, some exploring" },
+  { id: "a few hours", label: "A few hours", desc: "Must-sees and quick local bites" },
+  { id: "full day", label: "A full day", desc: "Balanced mix, some exploring" },
   { id: "weekend", label: "A weekend", desc: "Relaxed pace, hidden gems" },
-  { id: "week", label: "A week+", desc: "Off-the-beaten-path points of interest" },
+  { id: "week plus", label: "A week+", desc: "Off-the-beaten-path points of interest" },
 ];
 
 const PACE_OPTIONS = [
   { id: "hustle", label: "I'm ready to hustle!", desc: "Move fast, more stops, quick bites" },
-  { id: "balanced", label: "Well-paced day of adventure", desc: "Typical time at spots, some walking" },
+  { id: "typical", label: "Well-paced day of adventure", desc: "Typical time at spots, some walking" },
   { id: "easy", label: "Nice and easy, please!", desc: "Fewer stops, linger longer, sit-down meals" },
 ];
 
 const BUDGET_OPTIONS = [
-  { id: "cheap", label: "Keep it cheap!", desc: "Parks, street food, free entry. Splurge only for once-in-a-lifetime must-dos." },
-  { id: "flexible", label: "Flexible for the right things!", desc: "Mid-range meals, paid attractions, faster transit if needed." },
-  { id: "vacay", label: "I'm on vacay — make the most of it!", desc: "Tours, great dining, VIP entry — no regrets." },
+  { id: "inexpensive", label: "Keep it cheap!", desc: "Parks, street food, free entry. Splurge only for once-in-a-lifetime must-dos." },
+  { id: "mid-range", label: "Flexible for the right things!", desc: "Mid-range meals, paid attractions, faster transit if needed." },
+  { id: "YOLO vacay", label: "I'm on vacay — make the most of it!", desc: "Tours, great dining, VIP entry — no regrets." },
 ];
 
 type OptionProps = {
@@ -47,7 +47,7 @@ export default function PreferencesScreen() {
   const [pace, setPace] = useState("");
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
-  const setPreferences = usePreferencesStore(state => state.setPreferences);
+  const setPreferences = useAppStore(state => state.setPreferences);
 
   useEffect(() => {
     (async () => {
