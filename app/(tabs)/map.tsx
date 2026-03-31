@@ -3,7 +3,7 @@ import MapboxGL from "@rnmapbox/maps";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
@@ -22,6 +22,7 @@ const LOADING_MESSAGES = [
 
 function LoadingMessage() {
   const [index, setIndex] = useState(0);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (index >= LOADING_MESSAGES.length - 1) return;
@@ -31,9 +32,23 @@ function LoadingMessage() {
     return () => clearTimeout(timer);
   }, [index]);
 
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: ((index + 1) / LOADING_MESSAGES.length) * 100,
+      duration: 400,
+      useNativeDriver: false,
+    }).start();
+  }, [index]);
+
   return (
     <View style={styles.loadingOverlay}>
       <Text style={styles.loadingText}>{LOADING_MESSAGES[index]}</Text>
+      <View style={styles.progressBarBackground}>
+        <Animated.View style={[styles.progressBarFill, { width: progressAnim.interpolate({
+          inputRange: [0, 100],
+          outputRange: ["0%", "100%"],
+        }) }]} />
+      </View>
     </View>
   );
 }
@@ -463,8 +478,22 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 15,
-    color: "#555",
+    color: "#333",
     fontStyle: "italic",
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  progressBarBackground: {
+  width: "100%",
+  height: 4,
+  backgroundColor: "#e0e0e0",
+  borderRadius: 2,
+  overflow: "hidden",
+  },
+  progressBarFill: {
+    height: 4,
+    backgroundColor: "#000",
+    borderRadius: 2,
   },
   legLabel: {
     backgroundColor: "transparent",
