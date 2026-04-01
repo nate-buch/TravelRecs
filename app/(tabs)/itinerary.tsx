@@ -1,10 +1,12 @@
 import { router } from "expo-router";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 import { LEG_COLORS } from "../config/colors";
+import { getRouteLegs } from "../config/directions";
 import { useAppStore } from "../config/store";
 
 export default function ItineraryScreen() {
-  const { venues, time, pace, budget } = useAppStore();
+  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, location } = useAppStore();
 
   if (venues.length === 0) {
     return (
@@ -22,55 +24,88 @@ export default function ItineraryScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>YOUR ITINERARY</Text>
-      <View style={styles.headingDivider} />
-
-      <View style={styles.prefsRow}>
-        <View style={styles.prefItem}>
-          <Text style={styles.prefsLabel}>TRIP LENGTH</Text>
-          <Text style={styles.prefTag}>{time}</Text>
-        </View>
-        <Text style={styles.prefDivider}>|</Text>
-        <View style={styles.prefItem}>
-          <Text style={styles.prefsLabel}>SPEED</Text>
-          <Text style={styles.prefTag}>{pace}</Text>
-        </View>
-        <Text style={styles.prefDivider}>|</Text>
-        <View style={styles.prefItem}>
-          <Text style={styles.prefsLabel}>BUDGET</Text>
-          <Text style={styles.prefTag}>{budget}</Text>
-        </View>
-      </View>
-
-      {venues.map((venue, index) => (
-        <View key={index} style={styles.venueCard}>
-          <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}>
-            <Text style={styles.venueNumberText}>{index + 1}</Text>
+    <DraggableFlatList
+      data={venues}
+      keyExtractor={(item, index) => `${item.name}-${index}`}
+      
+      onDragEnd={async ({ data }) => {
+        setVenues(data);
+        if (location) {
+          const legs = await getRouteLegs(
+            [location.longitude, location.latitude],
+            data
+          );
+          setRouteLegs(legs);
+        }
+      }}
+      
+      ListHeaderComponent={() => (
+        <View style={styles.container}>
+          <Text style={styles.heading}>YOUR ITINERARY</Text>
+          <View style={styles.headingDivider} />
+          <View style={styles.prefsRow}>
+            <View style={styles.prefItem}>
+              <Text style={styles.prefsLabel}>TRIP LENGTH</Text>
+              <Text style={styles.prefTag}>{time}</Text>
+            </View>
+            <Text style={styles.prefDivider}>|</Text>
+            <View style={styles.prefItem}>
+              <Text style={styles.prefsLabel}>SPEED</Text>
+              <Text style={styles.prefTag}>{pace}</Text>
+            </View>
+            <Text style={styles.prefDivider}>|</Text>
+            <View style={styles.prefItem}>
+              <Text style={styles.prefsLabel}>BUDGET</Text>
+              <Text style={styles.prefTag}>{budget}</Text>
+            </View>
           </View>
-          <View style={styles.venueContent}>
-            <Text style={styles.venueName}>{venue.name}</Text>
-            <Text style={styles.venueAddress}>{venue.address}</Text>
-            <Text style={styles.venueJustification}>{venue.justification}</Text>
-            <Text style={styles.venueHours}>🕐 {venue.hours}</Text>
-          </View>
+          <View style={styles.headingDivider} />
         </View>
-      ))}
+      )}
 
-      <TouchableOpacity
-        style={styles.regenerateButton}
-        onPress={() => router.push("/(tabs)/map")}
-      >
-        <Text style={styles.regenerateButtonText}>Regenerate on map</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      renderItem={({ item: venue, getIndex, drag, isActive }: RenderItemParams<typeof venues[0]>) => {
+        const index = getIndex() ?? 0;
+        const leg = routeLegs[index];
+        return (
+          <ScaleDecorator>
+            <View>
+              {leg && (
+                <View style={styles.legBar}>
+                  <View style={styles.legDivider} />
+                  <Text style={styles.legBarText}>
+                    {`Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `  ·  Drive: ${leg.drivingDuration} min` : ""}`}
+                  </Text>
+                  <View style={styles.legDivider} />
+                </View>
+              )}
+              <TouchableOpacity
+                onLongPress={drag}
+                disabled={isActive}
+                style={[styles.venueCard, isActive && { opacity: 0.8, backgroundColor: "#f9f9f9" }]}
+              >
+                <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}>
+                  <Text style={styles.venueNumberText}>{index + 1}</Text>
+                </View>
+                <View style={styles.venueContent}>
+                  <Text style={styles.venueName}>{venue.name}</Text>
+                  <Text style={styles.venueAddress}>{venue.address}</Text>
+                  <Text style={styles.venueJustification}>{venue.justification}</Text>
+                  <Text style={styles.venueHours}>🕐 {venue.hours}</Text>
+                </View>
+                <Text style={styles.dragHandle}>☰</Text>
+              </TouchableOpacity>
+            </View>
+          </ScaleDecorator>
+        );
+      }}
+      contentContainerStyle={{ paddingBottom: 48 }}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     padding: 24,
-    paddingBottom: 48,
   },
   emptyContainer: {
     flex: 1,
@@ -142,6 +177,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 8,
   },
+  dragHandle: {
+  fontSize: 18,
+  color: "#ccc",
+  paddingLeft: 8,
+  alignSelf: "center",
+  },
   venueCard: {
     flexDirection: "row",
     marginBottom: 20,
@@ -184,6 +225,27 @@ const styles = StyleSheet.create({
   venueHours: {
     fontSize: 13,
     color: "#666",
+  },
+  legBar: {
+    marginLeft: 0,
+    marginBottom: 12,
+    marginTop: 4,
+    alignItems: "center",
+  },
+  legBarText: {
+    fontSize: 16,
+    fontWeight: "600",
+    fontStyle: "italic",
+    color: "#888",
+    textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginVertical: 6,
+  },
+  legDivider: {
+    width: "50%",
+    height: 1,
+    backgroundColor: "#ddd",
   },
   regenerateButton: {
     borderWidth: 1.5,

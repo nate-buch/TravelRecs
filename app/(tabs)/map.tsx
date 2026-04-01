@@ -61,7 +61,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs } = useAppStore();
+  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation } = useAppStore();
 
   useEffect(() => {
     (async () => {
@@ -72,6 +72,7 @@ export default function MapScreen() {
       }
       const loc = await Location.getCurrentPositionAsync({});
       setLocation(loc);
+      saveLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
     })();
   }, []);
 

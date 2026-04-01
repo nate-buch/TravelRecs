@@ -69,7 +69,7 @@ export default function PreferencesScreen() {
       <Text style={styles.heading}>PLAN YOUR DAY</Text>
       <View style={styles.headingDivider} />
 
-      <Text style={styles.sectionTitle}>How much time do you have?</Text>
+      <Text style={styles.sectionTitle}>How long is your visit?</Text>
       <View style={styles.optionsGroup}>
         {TIME_OPTIONS.map(o => (
           <OptionCard key={o.id} label={o.label} desc={o.desc} selected={time === o.id} onPress={() => setTime(o.id)} />
