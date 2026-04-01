@@ -141,7 +141,10 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <MapboxGL.MapView style={styles.map}>
+      <MapboxGL.MapView 
+        style={styles.map}
+        styleURL="mapbox://styles/flashpackingguide/cmngh698v007501qo9tazbw0c?fresh=true"
+      >
 
         <MapboxGL.Camera
           ref={cameraRef}
