@@ -59,7 +59,7 @@ export default function ItineraryScreen() {
               <Text style={styles.prefTag}>{budget}</Text>
             </View>
           </View>
-          <View style={styles.headingDivider} />
+          <View style={[styles.headingDivider, { marginBottom: 4 }]} />
         </View>
       )}
 
@@ -80,11 +80,15 @@ export default function ItineraryScreen() {
               )}
               <TouchableOpacity
                 onLongPress={drag}
+                delayLongPress={200}
                 disabled={isActive}
                 style={[styles.venueCard, isActive && { opacity: 0.8, backgroundColor: "#f9f9f9" }]}
               >
-                <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}>
-                  <Text style={styles.venueNumberText}>{index + 1}</Text>
+                <View style={styles.dragHandleContainer}>
+                  <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}>
+                    <Text style={styles.venueNumberText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.dragHandle}>☰</Text>
                 </View>
                 <View style={styles.venueContent}>
                   <Text style={styles.venueName}>{venue.name}</Text>
@@ -92,7 +96,6 @@ export default function ItineraryScreen() {
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   <Text style={styles.venueHours}>🕐 {venue.hours}</Text>
                 </View>
-                <Text style={styles.dragHandle}>☰</Text>
               </TouchableOpacity>
             </View>
           </ScaleDecorator>
@@ -178,15 +181,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   dragHandle: {
-  fontSize: 18,
-  color: "#ccc",
-  paddingLeft: 8,
-  alignSelf: "center",
+    fontSize: 24,
+    color: "#aaa",
+    marginTop: 14,
+  },
+  dragHandleContainer: {
+    alignItems: "center",
+    marginRight: 6,
   },
   venueCard: {
     flexDirection: "row",
     marginBottom: 20,
-    gap: 14,
+    paddingLeft: 8,
+    gap: 6,
   },
   venueNumber: {
     width: 32,
