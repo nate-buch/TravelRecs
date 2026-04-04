@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
+import { calculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
 
 const formatDuration = (minutes: number): string => {
@@ -13,7 +14,7 @@ const formatDuration = (minutes: number): string => {
 };
 
 export default function ItineraryScreen() {
-  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, location, timeBlocks } = useAppStore();
+  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, setTimeBlocks, location, timeBlocks } = useAppStore();
 
   if (venues.length === 0) {
     return (
@@ -43,6 +44,8 @@ export default function ItineraryScreen() {
             data
           );
           setRouteLegs(legs);
+          const blocks = calculateSchedule(data, legs, pace);
+          setTimeBlocks(blocks);
         }
       }}
       
