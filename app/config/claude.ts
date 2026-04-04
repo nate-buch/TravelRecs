@@ -8,6 +8,7 @@ export type Venue = {
   hours: string;
   address: string;
   types?: string[];
+  venueType?: string;
 };
 
 export const generateItinerary = async (
@@ -79,12 +80,13 @@ DIVERSITY RULES:
 - Mix venue types where possible — alternate between activity/attraction types to create a dynamic day of experiences
 - Consider when the user would be eating, and avoid recommending another food stop immediately after — they might want to walk or do an activity in between
 
-You MUST respond with ONLY a valid JSON array in visit order, no other text:
+You MUST respond with ONLY a valid JSON array of venue names, no other text. Example format:
 [
   {
     "name": "Exact venue name from the list above",
     "justification": "One sentence tailored to their preferences and why NOW is a good time to visit",
-    "hours": "Opening hours if known, otherwise Verify before visiting"
+    "hours": "Opening hours if known, otherwise Verify before visiting",
+    "venueType": "one of: coffee_shop, restaurant, museum, bar, park_viewpoint, live_music, attraction_landmark, art_gallery, market, nightclub, brewery"
   }
 ]`,
         },
@@ -98,20 +100,21 @@ You MUST respond with ONLY a valid JSON array in visit order, no other text:
   }
   const text = data.content[0].text;
   const clean = text.replace(/```json|```/g, "").trim();
-  
+
         try {
         const parsed = JSON.parse(clean) as { name: string; justification: string; hours: string }[];
         return parsed.map(item => {
             const match = nearbyPlaces.find(p => p.name === item.name);
-            return {
-            name: item.name,
-            latitude: match?.latitude ?? 0,
-            longitude: match?.longitude ?? 0,
-            address: match?.address ?? "",
-            justification: item.justification,
-            hours: item.hours,
-            types: match?.types ?? [],
-            };
+                return {
+                name: item.name,
+                latitude: match?.latitude ?? 0,
+                longitude: match?.longitude ?? 0,
+                address: match?.address ?? "",
+                justification: item.justification,
+                hours: item.hours,
+                types: match?.types ?? [],
+                venueType: item.venueType,
+                };
         }).filter(v => v.latitude !== 0);
         } catch {
         throw new Error("Failed to parse itinerary. Please try again.");

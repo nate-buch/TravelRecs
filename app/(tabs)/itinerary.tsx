@@ -5,8 +5,15 @@ import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
 import { useAppStore } from "../config/store";
 
+const formatDuration = (minutes: number): string => {
+  if (minutes < 60) return `~${minutes}min`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `~${hrs}hr ${mins}min` : `~${hrs}hr`;
+};
+
 export default function ItineraryScreen() {
-  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, location } = useAppStore();
+  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, location, timeBlocks } = useAppStore();
 
   if (venues.length === 0) {
     return (
@@ -90,12 +97,27 @@ export default function ItineraryScreen() {
                   </View>
                   <Text style={styles.dragHandle}>☰</Text>
                 </View>
+
                 <View style={styles.venueContent}>
                   <Text style={styles.venueName}>{venue.name}</Text>
                   <Text style={styles.venueAddress}>{venue.address}</Text>
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   <Text style={styles.venueHours}>🕐 {venue.hours}</Text>
                 </View>
+
+                {timeBlocks[index] && (
+                  <View style={styles.timeBlock}>
+                    <View style={styles.timeBlockTimeContainer}>
+                      <Text style={styles.timeBlockTime}>{timeBlocks[index].arrivalTime}</Text>
+                    </View>
+                    <View style={[styles.timeBlockTimeContainer, { marginBottom: 10 }]}>
+                      <Text style={styles.timeBlockTime}>{timeBlocks[index].departureTime}</Text>
+                    </View>
+                    <Text style={styles.timeBlockDuration}>
+                      {formatDuration(timeBlocks[index].durationMinutes)}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </ScaleDecorator>
@@ -193,6 +215,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 20,
     paddingLeft: 8,
+    paddingRight: 8,
     gap: 6,
   },
   venueNumber: {
@@ -232,6 +255,38 @@ const styles = StyleSheet.create({
   venueHours: {
     fontSize: 13,
     color: "#666",
+  },
+  venueTimeBlock: {
+  fontSize: 13,
+  fontWeight: "600",
+  color: "#333",
+  marginTop: 4,
+  },
+  timeBlock: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 12,
+    paddingTop: 30,
+    minWidth: 85,
+  },
+  timeBlockTimeContainer: {
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "#e0e0e0",
+    marginBottom: 16,
+  },
+  timeBlockTime: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+  timeBlockDuration: {
+    fontSize: 14,
+    color: "#555",
+    fontStyle: "italic",
   },
   legBar: {
     marginLeft: 0,

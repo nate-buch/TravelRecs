@@ -48,6 +48,7 @@ export default function PreferencesScreen() {
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
   const setPreferences = useAppStore(state => state.setPreferences);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -111,10 +112,16 @@ export default function PreferencesScreen() {
         onPress={async () => {
           await savePreferences(time, pace, budget, notes);
           setPreferences(time, pace, budget, notes);
-          router.push("/(tabs)/map");
+          setSaved(true);
+          setTimeout(() => {
+            setSaved(false);
+            router.push("/(tabs)/map");
+          }, 1000);
         }}
       >
-        <Text style={styles.saveButtonText}>Save preferences</Text>
+        <Text style={styles.saveButtonText}>
+          {saved ? "Preferences saved! ✓" : "Save preferences"}
+        </Text>
       </TouchableOpacity>
 
     </ScrollView>

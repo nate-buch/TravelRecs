@@ -9,6 +9,7 @@ import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
 import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute } from "../config/routing";
+import { calculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
@@ -61,7 +62,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation } = useAppStore();
+  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation, setTimeBlocks } = useAppStore();
 
   useEffect(() => {
     (async () => {
@@ -108,6 +109,8 @@ export default function MapScreen() {
         optimized
       );
       setRouteLegs(legs);
+      const blocks = calculateSchedule(optimized, legs, pace);
+      setTimeBlocks(blocks);
 
       if (result.length > 0 && location) {
         const lngs = [...result.map(v => v.longitude), location.coords.longitude];
