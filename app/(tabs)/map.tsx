@@ -21,6 +21,13 @@ const LOADING_MESSAGES = [
   "Finalizing itinerary...",
 ];
 
+const getDefaultMode = (leg: RouteLeg, pace: string): "walking" | "driving" => {
+  if (!leg.drivingDuration) return "walking";
+  if (pace.toLowerCase().includes("hustle")) return "driving";
+  if (pace.toLowerCase().includes("easy")) return "walking";
+  return leg.walkingDuration <= 15 ? "walking" : "driving";
+};
+
 function LoadingMessage() {
   const [index, setIndex] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -62,7 +69,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation, setTimeBlocks } = useAppStore();
+  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation, setTimeBlocks, setLegModes } = useAppStore();
 
   useEffect(() => {
     (async () => {
@@ -109,7 +116,11 @@ export default function MapScreen() {
         optimized
       );
       setRouteLegs(legs);
-      const blocks = calculateSchedule(optimized, legs, pace);
+      
+      const modes = legs.map(leg => getDefaultMode(leg, pace));
+      setLegModes(modes);
+      
+      const blocks = calculateSchedule(optimized, legs, pace, modes);
       setTimeBlocks(blocks);
 
       if (result.length > 0 && location) {

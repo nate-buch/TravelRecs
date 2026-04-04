@@ -25,13 +25,82 @@ const parseTime = (timeStr: string): Date => {
 };
 
 export default function ItineraryScreen() {
-  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, setTimeBlocks, location, timeBlocks } = useAppStore();
+  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, setTimeBlocks, location, timeBlocks, legModes, setLegModes } = useAppStore();
 
   const toggleLock = (index: number) => {
     const updated = [...timeBlocks];
     updated[index] = { ...updated[index], locked: !updated[index].locked };
     setTimeBlocks(updated);
   };
+
+  const toggleLegMode = (index: number) => {
+    const leg = routeLegs[index];
+    if (!leg.drivingDuration) return;
+    
+    const newModes = [...legModes];
+    const currentMode = newModes[index];
+    const newMode = currentMode === "walking" ? "driving" : "walking";
+    newModes[index] = newMode;
+
+    const oldDuration = currentMode === "walking" ? leg.walkingDuration : (leg.drivingDuration ?? 0);
+    const newDuration = newMode === "walking" ? leg.walkingDuration : (leg.drivingDuration ?? 0);
+    const oldRounded = roundToQuarter(oldDuration);
+    const newRounded = roundToQuarter(newDuration);
+    const deltaMins = newRounded - oldRounded;
+
+    if (deltaMins === 0) {
+      setLegModes(newModes);
+      return;
+    }
+
+    const blocks = [...timeBlocks];
+
+    if (deltaMins < 0) {
+      // Faster — shift destination venue and everything downstream earlier
+      for (let i = index; i < blocks.length; i++) {
+        if (blocks[i].locked) continue;
+        const arr = parseTime(blocks[i].arrivalTime);
+        const dep = parseTime(blocks[i].departureTime);
+        arr.setMinutes(arr.getMinutes() + deltaMins);
+        dep.setMinutes(dep.getMinutes() + deltaMins);
+        blocks[i] = {
+          ...blocks[i],
+          arrivalTime: formatTime(arr),
+          departureTime: formatTime(dep),
+        };
+      }
+        } else {
+          // Slower — shift arrival later, maintain duration, cascade everything downstream
+          if (index < blocks.length && !blocks[index].locked) {
+            const arr = parseTime(blocks[index].arrivalTime);
+            arr.setMinutes(arr.getMinutes() + deltaMins);
+            const dep = parseTime(blocks[index].departureTime);
+            dep.setMinutes(dep.getMinutes() + deltaMins);
+            blocks[index] = {
+              ...blocks[index],
+              arrivalTime: formatTime(arr),
+              departureTime: formatTime(dep),
+            };
+          }
+
+          // Cascade full delta to all downstream venues
+          for (let i = index + 1; i < blocks.length; i++) {
+            if (blocks[i].locked) continue;
+            const arr = parseTime(blocks[i].arrivalTime);
+            const dep = parseTime(blocks[i].departureTime);
+            arr.setMinutes(arr.getMinutes() + deltaMins);
+            dep.setMinutes(dep.getMinutes() + deltaMins);
+            blocks[i] = {
+              ...blocks[i],
+              arrivalTime: formatTime(arr),
+              departureTime: formatTime(dep),
+            };
+          }
+        }
+
+        setTimeBlocks(blocks);
+        setLegModes(newModes);
+      };
 
   const applyTimeChange = (index: number, mode: "arrival" | "departure", currentDate: Date, direction: number) => {
     if (timeBlocks[index].locked) {
@@ -232,7 +301,7 @@ export default function ItineraryScreen() {
             data
           );
           setRouteLegs(legs);
-          const blocks = recalculateSchedule(data, legs, timeBlocks, venues);
+          const blocks = recalculateSchedule(data, legs, timeBlocks, venues, legModes);
           setTimeBlocks(blocks);
         }
       }}
@@ -267,15 +336,47 @@ export default function ItineraryScreen() {
         return (
           <ScaleDecorator>
             <View>
-              {leg && (
-                <View style={styles.legBar}>
-                  <View style={styles.legDivider} />
-                  <Text style={styles.legBarText}>
-                    {`Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `  ·  Drive: ${leg.drivingDuration} min` : ""}`}
-                  </Text>
-                  <View style={styles.legDivider} />
+
+            {routeLegs[index] && (
+              <View style={styles.legBar}>
+                <View style={styles.legDivider} />
+                <View style={styles.legModeRow}>
+                  <TouchableOpacity
+                    onPress={() => toggleLegMode(index)}
+                    style={[
+                      styles.legModeOption,
+                      legModes[index] === "walking" && styles.legModeSelected,
+                    ]}
+                  >
+                    <Text style={[
+                      styles.legBarText,
+                      legModes[index] === "walking" && styles.legBarTextSelected,
+                    ]}>
+                      {`Walk: ${routeLegs[index].walkingDuration} min`}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {routeLegs[index].drivingDuration && (
+                    <TouchableOpacity
+                      onPress={() => toggleLegMode(index)}
+                      style={[
+                        styles.legModeOption,
+                        legModes[index] === "driving" && styles.legModeSelected,
+                      ]}
+                    >
+                      <Text style={[
+                        styles.legBarText,
+                        legModes[index] === "driving" && styles.legBarTextSelected,
+                      ]}>
+                        {`Drive: ${routeLegs[index].drivingDuration} min`}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              )}
+                <View style={styles.legDivider} />
+              </View>
+            )}
+
               <TouchableOpacity
                 onLongPress={drag}
                 delayLongPress={200}
@@ -580,6 +681,28 @@ const styles = StyleSheet.create({
     width: "50%",
     height: 1,
     backgroundColor: "#ddd",
+  },
+  legModeRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 6,
+  },
+  legModeOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  legModeSelected: {
+    borderColor: "#888",
+    backgroundColor: "rgba(0,0,0,0.05)",
+  },
+  legBarTextSelected: {
+    color: "#333",
+    fontWeight: "700",
   },
   regenerateButton: {
     borderWidth: 1.5,

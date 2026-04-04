@@ -12,6 +12,8 @@ type AppStore = {
   routeLegs: RouteLeg[];
   timeBlocks: TimeBlock[];
   location: { latitude: number; longitude: number } | null;
+  legModes: ("walking" | "driving")[];
+  setLegModes: (modes: ("walking" | "driving")[]) => void;
   setPreferences: (time: string, pace: string, budget: string, notes: string) => void;
   setVenues: (venues: Venue[]) => void;
   setRouteLegs: (legs: RouteLeg[]) => void;
@@ -29,6 +31,8 @@ export const useAppStore = create<AppStore>((set) => ({
   routeLegs: [],
   timeBlocks: [],
   location: null,
+  legModes: [],
+  setLegModes: (modes) => set({ legModes: modes }),
   setPreferences: (time, pace, budget, notes) => set({ time, pace, budget, notes }),
   setVenues: (venues) => set({ venues }),
   setRouteLegs: (legs) => set({ routeLegs: legs }),

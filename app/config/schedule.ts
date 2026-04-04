@@ -21,7 +21,8 @@ const parseTime = (timeStr: string): Date => {
 export const calculateSchedule = (
   venues: Venue[],
   routeLegs: RouteLeg[],
-  pace: string
+  pace: string,
+  legModes?: ("walking" | "driving")[]
 ): TimeBlock[] => {
   const now = new Date();
   // Round current time to nearest 15 min
@@ -37,8 +38,12 @@ export const calculateSchedule = (
 
     // Add travel time from previous location
     if (leg) {
-      const travelMinutes = roundToQuarter(leg.walkingDuration);
-      cursor = new Date(cursor.getTime() + travelMinutes * 60 * 1000);
+    const mode = legModes?.[i] ?? "walking";
+    const rawDuration = mode === "driving" && leg.drivingDuration 
+        ? leg.drivingDuration 
+        : leg.walkingDuration;
+    const travelMinutes = roundToQuarter(rawDuration);
+    cursor = new Date(cursor.getTime() + travelMinutes * 60 * 1000);
     }
 
     const arrival = new Date(cursor);
@@ -67,7 +72,8 @@ export const recalculateSchedule = (
   venues: Venue[],
   routeLegs: RouteLeg[],
   existingBlocks: TimeBlock[],
-  existingVenues: Venue[]
+  existingVenues: Venue[],
+  legModes?: ("walking" | "driving")[]
 ): TimeBlock[] => {
   const now = new Date();
   const roundedMinutes = roundToQuarter(now.getMinutes());
@@ -95,8 +101,12 @@ export const recalculateSchedule = (
     }
 
     if (leg) {
-      const travelMinutes = roundToQuarter(leg.walkingDuration);
-      cursor = new Date(cursor.getTime() + travelMinutes * 60 * 1000);
+    const mode = legModes?.[i] ?? "walking";
+    const rawDuration = mode === "driving" && leg.drivingDuration 
+        ? leg.drivingDuration 
+        : leg.walkingDuration;
+    const travelMinutes = roundToQuarter(rawDuration);
+    cursor = new Date(cursor.getTime() + travelMinutes * 60 * 1000);
     }
 
     const arrival = new Date(cursor);
