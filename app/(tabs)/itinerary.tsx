@@ -36,7 +36,7 @@ export default function ItineraryScreen() {
   const toggleLegMode = (index: number) => {
     const leg = routeLegs[index];
     if (!leg.drivingDuration) return;
-    
+
     const newModes = [...legModes];
     const currentMode = newModes[index];
     const newMode = currentMode === "walking" ? "driving" : "walking";
@@ -55,52 +55,151 @@ export default function ItineraryScreen() {
 
     const blocks = [...timeBlocks];
 
+    // ─────────────────────────────────────────────
+    // FASTER (walk → drive, deltaMins < 0)
+    // ─────────────────────────────────────────────
     if (deltaMins < 0) {
-      // Faster — shift destination venue and everything downstream earlier
+
+      // If there's a locked venue before index, make sure we don't
+      // push the arrival earlier than locked departure + travel time
+      if (index > 0) {
+        const nearestLockedBefore = Array.from({ length: index }, (_, i) => i)
+          .reverse()
+          .find(i => blocks[i].locked);
+
+        if (nearestLockedBefore !== undefined) {
+          const lockedDep = parseTime(blocks[nearestLockedBefore].departureTime);
+          const travelMins = roundToQuarter(
+            newMode === "driving" && leg.drivingDuration
+              ? leg.drivingDuration
+              : leg.walkingDuration
+          );
+          const earliestAllowedArr = new Date(lockedDep.getTime() + travelMins * 60 * 1000);
+          const currentArr = parseTime(blocks[index].arrivalTime);
+          const proposedArr = new Date(currentArr.getTime() + deltaMins * 60 * 1000);
+
+          if (proposedArr < earliestAllowedArr) {
+            // Cap delta so we don't go earlier than locked venue allows
+            const cappedDelta = Math.round((earliestAllowedArr.getTime() - currentArr.getTime()) / 60000);
+            if (cappedDelta === 0) {
+              setLegModes(newModes);
+              return;
+            }
+            for (let i = index; i < blocks.length; i++) {
+              if (blocks[i].locked) continue;
+              const arr = parseTime(blocks[i].arrivalTime);
+              const dep = parseTime(blocks[i].departureTime);
+              arr.setMinutes(arr.getMinutes() + cappedDelta);
+              dep.setMinutes(dep.getMinutes() + cappedDelta);
+              blocks[i] = { ...blocks[i], arrivalTime: formatTime(arr), departureTime: formatTime(dep) };
+            }
+            setTimeBlocks(blocks);
+            setLegModes(newModes);
+            return;
+          }
+        }
+      }
+
+      // No locked constraint — shift index and all downstream earlier
       for (let i = index; i < blocks.length; i++) {
         if (blocks[i].locked) continue;
         const arr = parseTime(blocks[i].arrivalTime);
         const dep = parseTime(blocks[i].departureTime);
         arr.setMinutes(arr.getMinutes() + deltaMins);
         dep.setMinutes(dep.getMinutes() + deltaMins);
-        blocks[i] = {
-          ...blocks[i],
-          arrivalTime: formatTime(arr),
-          departureTime: formatTime(dep),
-        };
+        blocks[i] = { ...blocks[i], arrivalTime: formatTime(arr), departureTime: formatTime(dep) };
       }
-        } else {
-          // Slower — shift arrival later, maintain duration, cascade everything downstream
-          if (index < blocks.length && !blocks[index].locked) {
-            const arr = parseTime(blocks[index].arrivalTime);
-            arr.setMinutes(arr.getMinutes() + deltaMins);
-            const dep = parseTime(blocks[index].departureTime);
-            dep.setMinutes(dep.getMinutes() + deltaMins);
-            blocks[index] = {
-              ...blocks[index],
-              arrivalTime: formatTime(arr),
-              departureTime: formatTime(dep),
-            };
-          }
 
-          // Cascade full delta to all downstream venues
-          for (let i = index + 1; i < blocks.length; i++) {
-            if (blocks[i].locked) continue;
-            const arr = parseTime(blocks[i].arrivalTime);
-            const dep = parseTime(blocks[i].departureTime);
-            arr.setMinutes(arr.getMinutes() + deltaMins);
-            dep.setMinutes(dep.getMinutes() + deltaMins);
-            blocks[i] = {
-              ...blocks[i],
-              arrivalTime: formatTime(arr),
+    // ─────────────────────────────────────────────
+    // SLOWER (drive → walk, deltaMins > 0)
+    // ─────────────────────────────────────────────
+    } else {
+
+      // If there's a locked venue before index, check if new travel time
+      // requires pushing arrival later than current
+      if (index > 0) {
+        const nearestLockedBefore = Array.from({ length: index }, (_, i) => i)
+          .reverse()
+          .find(i => blocks[i].locked);
+
+        if (nearestLockedBefore !== undefined) {
+          const lockedDep = parseTime(blocks[nearestLockedBefore].departureTime);
+          const travelMins = roundToQuarter(
+            newMode === "walking"
+              ? leg.walkingDuration
+              : (leg.drivingDuration ?? leg.walkingDuration)
+          );
+          const requiredArr = new Date(lockedDep.getTime() + travelMins * 60 * 1000);
+          const currentArr = parseTime(blocks[index].arrivalTime);
+
+          if (requiredArr > currentArr) {
+            // Push index and all downstream later to respect locked venue
+            const pushDelta = Math.round((requiredArr.getTime() - currentArr.getTime()) / 60000);
+            for (let i = index; i < blocks.length; i++) {
+              if (blocks[i].locked) continue;
+              const arr = parseTime(blocks[i].arrivalTime);
+              const dep = parseTime(blocks[i].departureTime);
+              arr.setMinutes(arr.getMinutes() + pushDelta);
+              dep.setMinutes(dep.getMinutes() + pushDelta);
+              blocks[i] = { ...blocks[i], arrivalTime: formatTime(arr), departureTime: formatTime(dep) };
+            }
+            setTimeBlocks(blocks);
+            setLegModes(newModes);
+            return;
+          }
+        }
+      }
+
+      // If preceding venue is unlocked and gap is now too small for new travel time,
+      // pull its departure earlier to make room
+      if (index > 0 && !blocks[index - 1].locked) {
+        const prevDep = parseTime(blocks[index - 1].departureTime);
+        const currArr = parseTime(blocks[index].arrivalTime);
+        const travelMins = roundToQuarter(
+          newMode === "driving" && leg.drivingDuration
+            ? leg.drivingDuration
+            : leg.walkingDuration
+        );
+        const currentGap = (currArr.getTime() - prevDep.getTime()) / 60000;
+
+        if (currentGap < travelMins) {
+          const shortfall = travelMins - currentGap;
+          const newDuration = blocks[index - 1].durationMinutes - shortfall;
+          if (newDuration >= 15) {
+            const dep = parseTime(blocks[index - 1].departureTime);
+            dep.setMinutes(dep.getMinutes() - shortfall);
+            blocks[index - 1] = {
+              ...blocks[index - 1],
               departureTime: formatTime(dep),
+              durationMinutes: newDuration,
             };
           }
         }
+      }
 
-        setTimeBlocks(blocks);
-        setLegModes(newModes);
-      };
+      // Shift the destination venue itself later (fixes index === 0 case too)
+      if (!blocks[index].locked) {
+        const arr = parseTime(blocks[index].arrivalTime);
+        const dep = parseTime(blocks[index].departureTime);
+        arr.setMinutes(arr.getMinutes() + deltaMins);
+        dep.setMinutes(dep.getMinutes() + deltaMins);
+        blocks[index] = { ...blocks[index], arrivalTime: formatTime(arr), departureTime: formatTime(dep) };
+      }
+
+      // Cascade full delta to all downstream venues
+      for (let i = index + 1; i < blocks.length; i++) {
+        if (blocks[i].locked) continue;
+        const arr = parseTime(blocks[i].arrivalTime);
+        const dep = parseTime(blocks[i].departureTime);
+        arr.setMinutes(arr.getMinutes() + deltaMins);
+        dep.setMinutes(dep.getMinutes() + deltaMins);
+        blocks[i] = { ...blocks[i], arrivalTime: formatTime(arr), departureTime: formatTime(dep) };
+      }
+    }
+
+    setTimeBlocks(blocks);
+    setLegModes(newModes);
+  };
 
   const applyTimeChange = (index: number, mode: "arrival" | "departure", currentDate: Date, direction: number) => {
     if (timeBlocks[index].locked) {
@@ -150,7 +249,15 @@ export default function ItineraryScreen() {
           if (index > 0) {
             const prevDep = parseTime(blocks[index - 1].departureTime);
             const targetArr = new Date(currentDate.getTime() + deltaMins * 60 * 1000);
-            const travelMins = routeLegs[index] ? roundToQuarter(routeLegs[index].walkingDuration) : 0;
+            
+            const travelMins = routeLegs[index] 
+              ? roundToQuarter(
+                  legModes[index] === "driving" && routeLegs[index].drivingDuration
+                    ? routeLegs[index].drivingDuration
+                    : routeLegs[index].walkingDuration
+                )
+              : 0;
+
             const bufferMins = (targetArr.getTime() - prevDep.getTime()) / 60000;
 
             if (bufferMins >= travelMins) {
@@ -175,23 +282,45 @@ export default function ItineraryScreen() {
           // No buffer — need to squeeze preceding venues
           let minutesToRecover = Math.abs(deltaMins);
 
-          const minTime = routeLegs.slice(0, index).reduce((sum, leg) => {
-            return sum + roundToQuarter(leg.walkingDuration);
-          }, 0) + (index * 15);
+          // Find the nearest locked venue before this index
+          const nearestLockedIndex = Array.from({ length: index }, (_, i) => i)
+            .reverse()
+            .find(i => timeBlocks[i].locked);
 
-          const currentTime = routeLegs.slice(0, index).reduce((sum, leg, i) => {
-            return sum + roundToQuarter(leg.walkingDuration) + blocks[i].durationMinutes;
+          // Only squeeze venues after the nearest locked one
+          const precedingIndices = Array.from({ length: index }, (_, i) => i)
+            .filter(i => !timeBlocks[i].locked)
+            .filter(i => nearestLockedIndex === undefined || i > nearestLockedIndex)
+            .sort((a, b) => blocks[b].durationMinutes - blocks[a].durationMinutes);
+
+          // Only count venues after the nearest locked one:
+          const startIndex = nearestLockedIndex !== undefined ? nearestLockedIndex + 1 : 0;
+
+          const minTime = routeLegs.slice(startIndex, index).reduce((sum, leg, i) => {
+            const legIndex = startIndex + i;
+            const mode = legModes[legIndex];
+            const duration = mode === "driving" && leg.drivingDuration 
+              ? leg.drivingDuration 
+              : leg.walkingDuration;
+            return sum + roundToQuarter(duration);
+          }, 0) + ((index - startIndex) * 15);
+
+          const currentTime = routeLegs.slice(startIndex, index).reduce((sum, leg, i) => {
+            const legIndex = startIndex + i;
+            const mode = legModes[legIndex];
+            const duration = mode === "driving" && leg.drivingDuration
+              ? leg.drivingDuration
+              : leg.walkingDuration;
+            return sum + roundToQuarter(duration) + blocks[startIndex + i].durationMinutes;
           }, 0);
 
           if (currentTime - minutesToRecover < minTime) {
-            alert("Not enough time to move this arrival earlier. Try removing a stop or reordering the route.");
+            alert(nearestLockedIndex !== undefined 
+              ? `Can't move earlier — up against the locked departure time of ${venues[nearestLockedIndex].name}.`
+              : "Not enough time to move this arrival earlier. Try removing a stop or reordering the route."
+            );
             return;
           }
-
-          // Squeeze preceding venues starting with longest duration — skip locked ones
-          const precedingIndices = Array.from({ length: index }, (_, i) => i)
-            .filter(i => !timeBlocks[i].locked)
-            .sort((a, b) => blocks[b].durationMinutes - blocks[a].durationMinutes);
 
           for (const i of precedingIndices) {
             if (minutesToRecover <= 0) break;
@@ -257,8 +386,36 @@ export default function ItineraryScreen() {
         departureTime: formatTime(newDep),
         durationMinutes: newDuration,
       };
+
+      // Find the nearest locked venue after this index
+      const nearestLockedAhead = Array.from(
+        { length: blocks.length - index - 1 }, 
+        (_, i) => index + 1 + i
+      ).find(i => blocks[i].locked);
+
+      if (nearestLockedAhead !== undefined) {
+        // Check if cascade would push past the locked venue
+        const lockedArr = parseTime(blocks[nearestLockedAhead].arrivalTime);
+        const newDep = parseTime(blocks[index].departureTime);
+        
+        const travelMins = routeLegs[nearestLockedAhead] 
+          ? roundToQuarter(
+              legModes[nearestLockedAhead] === "driving" && routeLegs[nearestLockedAhead].drivingDuration
+                ? routeLegs[nearestLockedAhead].drivingDuration
+                : routeLegs[nearestLockedAhead].walkingDuration
+            )
+          : 0;
+        
+          const latestAllowedDep = new Date(lockedArr.getTime() - travelMins * 60 * 1000);
+        
+        if (newDep > latestAllowedDep) {
+          alert(`Can't extend further — up against the locked arrival time of ${venues[nearestLockedAhead].name}.`);
+          return;
+        }
+      }
+
       for (let i = index + 1; i < blocks.length; i++) {
-        if (timeBlocks[i].locked) continue;
+        if (blocks[i].locked) continue;
         const arr = parseTime(blocks[i].arrivalTime);
         const dep = parseTime(blocks[i].departureTime);
         arr.setMinutes(arr.getMinutes() + deltaMins);
