@@ -1,10 +1,11 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
 import { formatTime, roundToQuarter } from "../config/durations";
-import { calculateSchedule } from "../config/schedule";
+import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
 
 const formatDuration = (minutes: number): string => {
@@ -26,30 +27,29 @@ const parseTime = (timeStr: string): Date => {
 export default function ItineraryScreen() {
   const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, setTimeBlocks, location, timeBlocks } = useAppStore();
 
+  const toggleLock = (index: number) => {
+    const updated = [...timeBlocks];
+    updated[index] = { ...updated[index], locked: !updated[index].locked };
+    setTimeBlocks(updated);
+  };
+
   const applyTimeChange = (index: number, mode: "arrival" | "departure", currentDate: Date, direction: number) => {
+    if (timeBlocks[index].locked) {
+      const updated = [...timeBlocks];
+      updated[index] = { ...updated[index], locked: false };
+      setTimeBlocks(updated);
+      return;
+    }
+    
     const newDate = new Date(currentDate.getTime() + direction * 15 * 60 * 1000);
     const blocks = [...timeBlocks];
     const deltaMins = direction * 15;
 
   if (mode === "arrival") {
-    if (direction === 1) {
-      // Moving arrival later — simple forward cascade
-      for (let i = index; i < blocks.length; i++) {
-        const arr = parseTime(blocks[i].arrivalTime);
-        const dep = parseTime(blocks[i].departureTime);
-        arr.setMinutes(arr.getMinutes() + deltaMins);
-        dep.setMinutes(dep.getMinutes() + deltaMins);
-        blocks[i] = {
-          ...blocks[i],
-          arrivalTime: formatTime(arr),
-          departureTime: formatTime(dep),
-        };
-      }
-    } else {
-      // Moving arrival earlier — squeeze preceding venues
-      if (index === 0) {
-        // First venue — just shift everything earlier
-        for (let i = 0; i < blocks.length; i++) {
+      if (direction === 1) {
+        // Moving arrival later — simple forward cascade
+        for (let i = index; i < blocks.length; i++) {
+          if (i > index && timeBlocks[i].locked) continue;
           const arr = parseTime(blocks[i].arrivalTime);
           const dep = parseTime(blocks[i].departureTime);
           arr.setMinutes(arr.getMinutes() + deltaMins);
@@ -61,104 +61,122 @@ export default function ItineraryScreen() {
           };
         }
       } else {
-        // Check if there's already enough buffer — no squeezing needed
-        if (index > 0) {
-          const prevDep = parseTime(blocks[index - 1].departureTime);
-          const targetArr = new Date(currentDate.getTime() + deltaMins * 60 * 1000);
-          const travelMins = routeLegs[index] ? roundToQuarter(routeLegs[index].walkingDuration) : 0;
-          const bufferMins = (targetArr.getTime() - prevDep.getTime()) / 60000;
+        // Moving arrival earlier — squeeze preceding venues
+        if (index === 0) {
+          // First venue — just shift everything earlier
+          for (let i = 0; i < blocks.length; i++) {
+            if (i > index && timeBlocks[i].locked) continue;
+            const arr = parseTime(blocks[i].arrivalTime);
+            const dep = parseTime(blocks[i].departureTime);
+            arr.setMinutes(arr.getMinutes() + deltaMins);
+            dep.setMinutes(dep.getMinutes() + deltaMins);
+            blocks[i] = {
+              ...blocks[i],
+              arrivalTime: formatTime(arr),
+              departureTime: formatTime(dep),
+            };
+          }
+        } else {
+          // Check if there's already enough buffer — no squeezing needed
+          if (index > 0) {
+            const prevDep = parseTime(blocks[index - 1].departureTime);
+            const targetArr = new Date(currentDate.getTime() + deltaMins * 60 * 1000);
+            const travelMins = routeLegs[index] ? roundToQuarter(routeLegs[index].walkingDuration) : 0;
+            const bufferMins = (targetArr.getTime() - prevDep.getTime()) / 60000;
 
-          if (bufferMins >= travelMins) {
-            // Plenty of buffer — shift this venue and everything downstream earlier
-            for (let i = index; i < blocks.length; i++) {
-              const arr = parseTime(blocks[i].arrivalTime);
-              const dep = parseTime(blocks[i].departureTime);
-              arr.setMinutes(arr.getMinutes() + deltaMins);
-              dep.setMinutes(dep.getMinutes() + deltaMins);
-              blocks[i] = {
-                ...blocks[i],
-                arrivalTime: formatTime(arr),
-                departureTime: formatTime(dep),
-              };
+            if (bufferMins >= travelMins) {
+              // Plenty of buffer — shift this venue and everything downstream earlier
+              for (let i = index; i < blocks.length; i++) {
+                if (i > index && timeBlocks[i].locked) continue;
+                const arr = parseTime(blocks[i].arrivalTime);
+                const dep = parseTime(blocks[i].departureTime);
+                arr.setMinutes(arr.getMinutes() + deltaMins);
+                dep.setMinutes(dep.getMinutes() + deltaMins);
+                blocks[i] = {
+                  ...blocks[i],
+                  arrivalTime: formatTime(arr),
+                  departureTime: formatTime(dep),
+                };
+              }
+              setTimeBlocks(blocks);
+              return;
             }
-            setTimeBlocks(blocks);
+          }
+
+          // No buffer — need to squeeze preceding venues
+          let minutesToRecover = Math.abs(deltaMins);
+
+          const minTime = routeLegs.slice(0, index).reduce((sum, leg) => {
+            return sum + roundToQuarter(leg.walkingDuration);
+          }, 0) + (index * 15);
+
+          const currentTime = routeLegs.slice(0, index).reduce((sum, leg, i) => {
+            return sum + roundToQuarter(leg.walkingDuration) + blocks[i].durationMinutes;
+          }, 0);
+
+          if (currentTime - minutesToRecover < minTime) {
+            alert("Not enough time to move this arrival earlier. Try removing a stop or reordering the route.");
             return;
           }
-        }
 
-        // No buffer — need to squeeze preceding venues
-        let minutesToRecover = Math.abs(deltaMins);
+          // Squeeze preceding venues starting with longest duration — skip locked ones
+          const precedingIndices = Array.from({ length: index }, (_, i) => i)
+            .filter(i => !timeBlocks[i].locked)
+            .sort((a, b) => blocks[b].durationMinutes - blocks[a].durationMinutes);
 
-        // Calculate minimum possible time for preceding venues
-        const minTime = routeLegs.slice(0, index).reduce((sum, leg) => {
-          return sum + roundToQuarter(leg.walkingDuration);
-        }, 0) + (index * 15); // 15min minimum per venue
-
-        const currentTime = routeLegs.slice(0, index).reduce((sum, leg, i) => {
-          return sum + roundToQuarter(leg.walkingDuration) + blocks[i].durationMinutes;
-        }, 0);
-
-        if (currentTime - minutesToRecover < minTime) {
-          // Can't squeeze enough — warn user
-          alert("Not enough time to move this arrival earlier. Try removing a stop or reordering the route.");
-          return;
-        }
-
-        // Squeeze preceding venues starting with longest duration
-        const precedingIndices = Array.from({ length: index }, (_, i) => i)
-          .sort((a, b) => blocks[b].durationMinutes - blocks[a].durationMinutes);
-
-        for (const i of precedingIndices) {
-          if (minutesToRecover <= 0) break;
-          const minDuration = 15;
-          const available = blocks[i].durationMinutes - minDuration;
-          const squeeze = Math.min(available, minutesToRecover);
-          if (squeeze > 0) {
-            const dep = parseTime(blocks[i].departureTime);
-            dep.setMinutes(dep.getMinutes() - squeeze);
-            blocks[i] = {
-              ...blocks[i],
-              departureTime: formatTime(dep),
-              durationMinutes: blocks[i].durationMinutes - squeeze,
-            };
-            minutesToRecover -= squeeze;
-          }
-        }
-
-        // Recalculate arrival times for all venues from scratch
-        // but lock in the desired arrival time for the target venue
-        const desiredArrival = new Date(currentDate.getTime() + deltaMins * 60 * 1000);
-        const startTime = parseTime(blocks[0].arrivalTime);
-        let cursor = new Date(startTime);
-        for (let i = 0; i < blocks.length; i++) {
-          if (i === index) {
-            // Use the desired arrival time — don't let cascade overwrite it
-            const arrival = new Date(desiredArrival);
-            cursor = new Date(desiredArrival);
-            cursor.setMinutes(cursor.getMinutes() + blocks[i].durationMinutes);
-            const departure = new Date(cursor);
-            blocks[i] = {
-              ...blocks[i],
-              arrivalTime: formatTime(arrival),
-              departureTime: formatTime(departure),
-            };
-          } else {
-            if (i > 0) {
-              const leg = routeLegs[i];
-              if (leg) cursor.setMinutes(cursor.getMinutes() + roundToQuarter(leg.walkingDuration));
+          for (const i of precedingIndices) {
+            if (minutesToRecover <= 0) break;
+            const minDuration = 15;
+            const available = blocks[i].durationMinutes - minDuration;
+            const squeeze = Math.min(available, minutesToRecover);
+            if (squeeze > 0) {
+              const dep = parseTime(blocks[i].departureTime);
+              dep.setMinutes(dep.getMinutes() - squeeze);
+              blocks[i] = {
+                ...blocks[i],
+                departureTime: formatTime(dep),
+                durationMinutes: blocks[i].durationMinutes - squeeze,
+              };
+              minutesToRecover -= squeeze;
             }
-            const arrival = new Date(cursor);
-            cursor.setMinutes(cursor.getMinutes() + blocks[i].durationMinutes);
-            const departure = new Date(cursor);
-            blocks[i] = {
-              ...blocks[i],
-              arrivalTime: formatTime(arrival),
-              departureTime: formatTime(departure),
-            };
+          }
+
+          const desiredArrival = new Date(currentDate.getTime() + deltaMins * 60 * 1000);
+          const startTime = parseTime(blocks[0].arrivalTime);
+          let cursor = new Date(startTime);
+          for (let i = 0; i < blocks.length; i++) {
+            if (timeBlocks[i].locked && i !== index) {
+              // Keep locked venue times, just update cursor
+              cursor = parseTime(blocks[i].departureTime);
+              continue;
+            }
+            if (i === index) {
+              const arrival = new Date(desiredArrival);
+              cursor = new Date(desiredArrival);
+              cursor.setMinutes(cursor.getMinutes() + blocks[i].durationMinutes);
+              const departure = new Date(cursor);
+              blocks[i] = {
+                ...blocks[i],
+                arrivalTime: formatTime(arrival),
+                departureTime: formatTime(departure),
+              };
+            } else {
+              if (i > 0) {
+                const leg = routeLegs[i];
+                if (leg) cursor.setMinutes(cursor.getMinutes() + roundToQuarter(leg.walkingDuration));
+              }
+              const arrival = new Date(cursor);
+              cursor.setMinutes(cursor.getMinutes() + blocks[i].durationMinutes);
+              const departure = new Date(cursor);
+              blocks[i] = {
+                ...blocks[i],
+                arrivalTime: formatTime(arrival),
+                departureTime: formatTime(departure),
+              };
+            }
           }
         }
       }
-    }
     } else {
       // Departure changed — update duration, shift everything downstream
       const arr = parseTime(blocks[index].arrivalTime);
@@ -171,6 +189,7 @@ export default function ItineraryScreen() {
         durationMinutes: newDuration,
       };
       for (let i = index + 1; i < blocks.length; i++) {
+        if (timeBlocks[i].locked) continue;
         const arr = parseTime(blocks[i].arrivalTime);
         const dep = parseTime(blocks[i].departureTime);
         arr.setMinutes(arr.getMinutes() + deltaMins);
@@ -213,7 +232,7 @@ export default function ItineraryScreen() {
             data
           );
           setRouteLegs(legs);
-          const blocks = calculateSchedule(data, legs, pace);
+          const blocks = recalculateSchedule(data, legs, timeBlocks, venues);
           setTimeBlocks(blocks);
         }
       }}
@@ -279,18 +298,33 @@ export default function ItineraryScreen() {
 
                 {timeBlocks[index] && (
                   <View style={styles.timeBlock}>
+                    <TouchableOpacity 
+                      onPress={(e) => {
+                        e.stopPropagation(); 
+                        toggleLock(index); 
+                      }}
+                      style={styles.lockButton}>
+                      <View style={[styles.lockCircle, timeBlocks[index].locked && styles.lockCircleActive]}>
+                        <Ionicons 
+                          name={timeBlocks[index].locked ? "lock-closed" : "lock-open"} 
+                          size={16} 
+                          color="#fff"
+                        />
+                      </View>
+                    </TouchableOpacity>
+
                     <View style={styles.timeBlockTimeContainer}>
                       <TouchableOpacity onPress={() => applyTimeChange(index, "arrival", parseTime(timeBlocks[index].arrivalTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
                       </TouchableOpacity>
-                        <View style={{ alignItems: "center", width: 44 }}>
-                          <Text style={styles.timeBlockTime}>
-                            {timeBlocks[index].arrivalTime.split(' ')[0]}
-                          </Text>
-                          <Text style={styles.timeBlockAmPm}>
-                            {timeBlocks[index].arrivalTime.split(' ')[1]}
-                          </Text>
-                        </View>
+                      <View style={{ alignItems: "center", width: 44 }}>
+                        <Text style={[styles.timeBlockTime, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[index].arrivalTime.split(' ')[0]}
+                        </Text>
+                        <Text style={[styles.timeBlockAmPm, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[index].arrivalTime.split(' ')[1]}
+                        </Text>
+                      </View>
                       <TouchableOpacity onPress={() => applyTimeChange(index, "arrival", parseTime(timeBlocks[index].arrivalTime), 1)}>
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
@@ -300,20 +334,20 @@ export default function ItineraryScreen() {
                       <TouchableOpacity onPress={() => applyTimeChange(index, "departure", parseTime(timeBlocks[index].departureTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
                       </TouchableOpacity>
-                        <View style={{ alignItems: "center", width: 44 }}>
-                          <Text style={styles.timeBlockTime}>
-                            {timeBlocks[index].departureTime.split(' ')[0]}
-                          </Text>
-                          <Text style={styles.timeBlockAmPm}>
-                            {timeBlocks[index].departureTime.split(' ')[1]}
-                          </Text>
-                        </View>
+                      <View style={{ alignItems: "center", width: 44 }}>
+                        <Text style={[styles.timeBlockTime, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[index].departureTime.split(' ')[0]}
+                        </Text>
+                        <Text style={[styles.timeBlockAmPm, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[index].departureTime.split(' ')[1]}
+                        </Text>
+                      </View>
                       <TouchableOpacity onPress={() => applyTimeChange(index, "departure", parseTime(timeBlocks[index].departureTime), 1)}>
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.timeBlockDuration}>
+                    <Text style={[styles.timeBlockDuration, timeBlocks[index].locked && { color: "#2d9e5f", fontWeight: "900" }]}>
                       {formatDuration(timeBlocks[index].durationMinutes)}
                     </Text>
                   </View>
@@ -504,6 +538,27 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#555",
     textAlign: "center",
+  },
+  lockButton: {
+  marginBottom: 4,
+  },
+  lockCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#b0bdb0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lockCircleActive: {
+    backgroundColor: "#2d9e5f",
+  },
+  lockIcon: {
+    fontSize: 12,
+  },
+  timeBlockTimeLocked: {
+    color: "#2d9e5f",
+    fontWeight: "900",
   },
   legBar: {
     marginLeft: 0,

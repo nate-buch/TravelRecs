@@ -17,6 +17,7 @@ type AppStore = {
   setRouteLegs: (legs: RouteLeg[]) => void;
   setTimeBlocks: (blocks: TimeBlock[]) => void;
   setLocation: (location: { latitude: number; longitude: number } | null) => void;
+  setLockedBlocks: (locked: boolean[]) => void;
 };
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -33,4 +34,6 @@ export const useAppStore = create<AppStore>((set) => ({
   setRouteLegs: (legs) => set({ routeLegs: legs }),
   setTimeBlocks: (blocks) => set({ timeBlocks: blocks }),
   setLocation: (location) => set({ location }),
+  lockedBlocks: [],
+  setLockedBlocks: (locked) => set({ lockedBlocks: locked }),
 }));
