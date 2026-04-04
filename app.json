@@ -11,7 +11,6 @@
     "ios": {
       "supportsTablet": true
     },
-    
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -47,7 +46,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "TravelRecs needs your location to find great spots near you."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
