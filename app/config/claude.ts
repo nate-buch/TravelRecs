@@ -49,7 +49,7 @@ Their preferences:
 - Time available: ${time}
 - Pace: ${pace}
 - Budget: ${budget}
-- Notes: ${notes || "None"}
+- Special instructions (MUST follow these): ${notes || "None"}
 
 Here are real nearby places from Google Places:
 ${placesList}

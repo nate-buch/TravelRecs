@@ -19,8 +19,10 @@ const parseTime = (timeStr: string): Date => {
   const [time, ampm] = timeStr.split(" ");
   const [hours, minutes] = time.split(":").map(Number);
   const date = new Date();
-  date.setHours(ampm === "PM" && hours !== 12 ? hours + 12 : hours === 12 && ampm === "AM" ? 0 : hours);
-  date.setMinutes(minutes, 0, 0);
+  let h = hours;
+  if (ampm === "AM" && hours === 12) h = 0;      // 12:00 AM = midnight = 0
+  else if (ampm === "PM" && hours !== 12) h = hours + 12;  // 1-11 PM = 13-23
+  date.setHours(h, minutes, 0, 0);
   return date;
 };
 

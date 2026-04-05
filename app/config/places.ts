@@ -11,7 +11,7 @@ export type PlacesVenue = {
 export const getNearbyPlaces = async (
   latitude: number,
   longitude: number,
-  radius: number = 1500
+  radius: number = 3000
 ): Promise<PlacesVenue[]> => {
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY}`;
 
