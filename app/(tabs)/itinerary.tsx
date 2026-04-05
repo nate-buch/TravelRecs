@@ -663,13 +663,13 @@ const styles = StyleSheet.create({
   headingDivider: {
     height: 1,
     backgroundColor: "#ddd",
-    marginBottom: 20,
+    marginBottom: 12,
   },
   prefsRow: {
     flexDirection: "row",
     justifyContent: "space-evenly",
     alignItems: "flex-start",
-    marginBottom: 24,
+    marginBottom: 12,
   },
   prefItem: {
     flex: 1,
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingLeft: 8,
     paddingRight: 6,
-    paddingTop: 24,
+    paddingTop: 8,
     width: 95,
   },
   timeBlockTimeContainer: {
@@ -832,10 +832,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginVertical: 6,
+    marginVertical: 1,
   },
   legDivider: {
-    width: "50%",
+    width: "75%",
     height: 1,
     backgroundColor: "#ddd",
   },

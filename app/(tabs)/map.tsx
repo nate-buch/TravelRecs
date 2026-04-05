@@ -69,7 +69,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation, setTimeBlocks, setLegModes } = useAppStore();
+  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation, setTimeBlocks, setLegModes, timeBlocks } = useAppStore();
 
   useEffect(() => {
     (async () => {
@@ -120,7 +120,7 @@ export default function MapScreen() {
       const modes = legs.map(leg => getDefaultMode(leg, pace));
       setLegModes(modes);
       
-      const blocks = calculateSchedule(optimized, legs, pace, modes);
+      const blocks = calculateSchedule(optimized, legs, pace);
       setTimeBlocks(blocks);
 
       if (result.length > 0 && location) {
@@ -237,7 +237,7 @@ export default function MapScreen() {
                   textHaloColor: "#ffffff",
                   textHaloWidth: 2,
                   textAnchor: "top",
-                  textOffset: [0, 1.5],
+                  textOffset: [0, 1.2],
                   symbolSortKey: 1,
                   textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
                   textMaxWidth: 8,
@@ -278,12 +278,16 @@ export default function MapScreen() {
                 properties: {
                   name: venue.name,
                   color: LEG_COLORS[index % LEG_COLORS.length],
+                  timeBlock: timeBlocks[index] 
+                    ? `${timeBlocks[index].arrivalTime} – ${timeBlocks[index].departureTime}`
+                    : "",
                 },
               })),
             }}
           >
             <MapboxGL.SymbolLayer
               id="venueNamesLayer"
+              aboveLayerID="legLabelsLayer"
               style={{
                 textField: ["get", "name"],
                 textSize: 16,
@@ -291,12 +295,29 @@ export default function MapScreen() {
                 textHaloColor: "#ffffff",
                 textHaloWidth: 2,
                 textAnchor: "bottom",
-                textOffset: [0, -1.0],
+                textOffset: [0, -1.4],
                 textMaxWidth: 10,
                 textAllowOverlap: true,
                 textIgnorePlacement: true,
                 symbolSortKey: 3,
                 textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+              }}
+            />
+            <MapboxGL.SymbolLayer
+              id="venueTimesLayer"
+              aboveLayerID="venueNamesLayer"
+              style={{
+                textField: ["get", "timeBlock"],
+                textSize: 12,
+                textColor: ["get", "color"],
+                textHaloColor: "#ffffff",
+                textHaloWidth: 2,
+                textAnchor: "bottom",
+                textOffset: [0, -1],
+                textMaxWidth: 12,
+                textAllowOverlap: true,
+                textIgnorePlacement: true,
+                textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
               }}
             />
           </MapboxGL.ShapeSource>

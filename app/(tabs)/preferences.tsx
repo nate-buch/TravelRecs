@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { loadPreferences, savePreferences } from "../config/preferences";
 import { useAppStore } from "../config/store";
 
@@ -49,6 +49,7 @@ export default function PreferencesScreen() {
   const [notes, setNotes] = useState("");
   const setPreferences = useAppStore(state => state.setPreferences);
   const [saved, setSaved] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,9 +66,16 @@ export default function PreferencesScreen() {
   const canSave = time && pace && budget;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+    >
+    <ScrollView 
+      ref={scrollViewRef}
+      contentContainerStyle={styles.container}
+    >
 
-      <Text style={styles.heading}>PLAN YOUR DAY</Text>
+      <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
       <View style={styles.headingDivider} />
 
       <Text style={styles.sectionTitle}>How long is your visit?</Text>
@@ -103,11 +111,16 @@ export default function PreferencesScreen() {
           value={notes}
           onChangeText={setNotes}
           multiline
+          onFocus={() => {           // ← add this
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 300);
+          }}
         />
       </View>
 
       <TouchableOpacity
-        style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+        style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
         disabled={!canSave}
         onPress={async () => {
           await savePreferences(time, pace, budget, notes);
@@ -116,15 +129,16 @@ export default function PreferencesScreen() {
           setTimeout(() => {
             setSaved(false);
             router.push("/(tabs)/map");
-          }, 1000);
+          }, 1200);
         }}
       >
         <Text style={styles.saveButtonText}>
-          {saved ? "Preferences saved! ✓" : "Save preferences"}
+          {saved ? "Preferences saved!  ✓" : "Save preferences"}
         </Text>
       </TouchableOpacity>
 
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -143,7 +157,7 @@ const styles = StyleSheet.create({
   headingDivider: {
     height: 1,
     backgroundColor: "#ddd",
-    marginBottom: 28,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 20,
@@ -158,7 +172,7 @@ const styles = StyleSheet.create({
   sectionDivider: {
     height: 1,
     backgroundColor: "#e8e8e8",
-    marginBottom: 24,
+    marginBottom: 12,
     marginTop: 4,
   },
   optional: {
@@ -167,15 +181,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   card: {
-    padding: 16,
+    padding: 4,
+    paddingHorizontal: 8,
     borderRadius: 12,
     backgroundColor: "#ebebeb",
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: "#d8d8d8",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   cardSelected: {
-    backgroundColor: "#000",
+    backgroundColor: "#444444",
     borderColor: "#000",
   },
   cardLabel: {
@@ -198,7 +213,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#e0e0e0",
     borderRadius: 12,
-    padding: 16,
+    padding: 10,
     fontSize: 15,
     color: "#111",
     minHeight: 80,
@@ -219,5 +234,8 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "600",
+  },
+  saveButtonSaved: {
+    backgroundColor: "#2d9e5f",
   },
 });
