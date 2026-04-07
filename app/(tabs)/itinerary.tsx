@@ -73,6 +73,29 @@ export default function ItineraryScreen() {
     setVenues(newVenues);
   };  
 
+  const removeVenue = async (index: number) => {
+    const newVenues = venues.filter((_, i) => i !== index);
+    const newTimeBlocks = timeBlocks.filter((_, i) => i !== index);
+    const newLegModes = legModes.filter((_, i) => i !== index);
+    setVenues(newVenues);
+
+    if (location && newVenues.length > 0) {
+      const legs = await getRouteLegs(
+        [location.longitude, location.latitude],
+        newVenues
+      );
+      setRouteLegs(legs);
+      const modes = legs.map((leg, i) => newLegModes[i] ?? "walking");
+      setLegModes(modes);
+      const blocks = recalculateSchedule(newVenues, legs, newTimeBlocks, newVenues);
+      setTimeBlocks(blocks);
+    } else {
+      setRouteLegs([]);
+      setLegModes([]);
+      setTimeBlocks([]);
+    }
+  };
+
   // #endregion
 
   // #region Time Adjustment: Travel Mode Change
