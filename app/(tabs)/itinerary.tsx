@@ -1,3 +1,5 @@
+// #region Imports
+
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -7,6 +9,10 @@ import { getRouteLegs } from "../config/directions";
 import { formatTime, roundToQuarter } from "../config/durations";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+
+// #endregion
+
+// #region Types and constants
 
 const formatDuration = (minutes: number): string => {
   if (minutes < 60) return `~${minutes}min`;
@@ -26,14 +32,50 @@ const parseTime = (timeStr: string): Date => {
   return date;
 };
 
+// #endregion
+
+// #region Main Component
+
 export default function ItineraryScreen() {
+  
+  // #region Store
+  
   const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, setTimeBlocks, location, timeBlocks, legModes, setLegModes } = useAppStore();
+
+  // #endregion
+
+  // #region Venue Actions
 
   const toggleLock = (index: number) => {
     const updated = [...timeBlocks];
     updated[index] = { ...updated[index], locked: !updated[index].locked };
     setTimeBlocks(updated);
+
+    // If locking schedule, also lock the venue
+    if (!timeBlocks[index].locked) {
+      const newVenues = [...venues];
+      newVenues[index] = { ...newVenues[index], locked: true };
+      setVenues(newVenues);
+    }
   };
+
+  const toggleVenueLock = (index: number) => {
+    const newVenues = [...venues];
+    const isCurrentlyLocked = newVenues[index].locked;
+    newVenues[index] = { ...newVenues[index], locked: !isCurrentlyLocked };
+    
+    // If unlocking venue, also unlock the schedule
+    if (isCurrentlyLocked && timeBlocks[index].locked) {
+      const newBlocks = [...timeBlocks];
+      newBlocks[index] = { ...newBlocks[index], locked: false };
+      setTimeBlocks(newBlocks);
+    }
+    setVenues(newVenues);
+  };  
+
+  // #endregion
+
+  // #region Time Adjustment: Travel Mode Change
 
   const toggleLegMode = (index: number) => {
     const leg = routeLegs[index];
@@ -56,6 +98,8 @@ export default function ItineraryScreen() {
     }
 
     const blocks = [...timeBlocks];
+
+    // #region Faster Travel Mode Selected (Walk → Drive)
 
     // ─────────────────────────────────────────────
     // FASTER (walk → drive, deltaMins < 0)
@@ -111,6 +155,10 @@ export default function ItineraryScreen() {
         dep.setMinutes(dep.getMinutes() + deltaMins);
         blocks[i] = { ...blocks[i], arrivalTime: formatTime(arr), departureTime: formatTime(dep) };
       }
+
+    // #endregion
+
+    // #region Slower Travel Mode Selected (Drive → Walk)
 
     // ─────────────────────────────────────────────
     // SLOWER (drive → walk, deltaMins > 0)
@@ -199,9 +247,15 @@ export default function ItineraryScreen() {
       }
     }
 
+    // #endregion
+
     setTimeBlocks(blocks);
     setLegModes(newModes);
   };
+
+  // #endregion
+
+  // #region Time Adjustment: Scheduling Change
 
   const applyTimeChange = (index: number, mode: "arrival" | "departure", currentDate: Date, direction: number) => {
     if (timeBlocks[index].locked) {
@@ -216,7 +270,9 @@ export default function ItineraryScreen() {
     const deltaMins = direction * 15;
 
   if (mode === "arrival") {
+
       if (direction === 1) {
+
         // Moving arrival later — simple forward cascade
         for (let i = index; i < blocks.length; i++) {
           if (i > index && timeBlocks[i].locked) continue;
@@ -230,7 +286,9 @@ export default function ItineraryScreen() {
             departureTime: formatTime(dep),
           };
         }
+
       } else {
+
         // Moving arrival earlier — squeeze preceding venues
         if (index === 0) {
           // First venue — just shift everything earlier
@@ -246,6 +304,7 @@ export default function ItineraryScreen() {
               departureTime: formatTime(dep),
             };
           }
+
         } else {
           // Check if there's already enough buffer — no squeezing needed
           if (index > 0) {
@@ -377,7 +436,9 @@ export default function ItineraryScreen() {
           }
         }
       }
+
     } else {
+
       // Departure changed — update duration, shift everything downstream
       const arr = parseTime(blocks[index].arrivalTime);
       const newDep = new Date(parseTime(blocks[index].departureTime).getTime() + deltaMins * 60 * 1000);
@@ -429,8 +490,13 @@ export default function ItineraryScreen() {
         };
       }
     }
+
     setTimeBlocks(blocks);
   };
+
+  // #endregion
+
+  // #region Empty State
 
   if (venues.length === 0) {
     return (
@@ -446,6 +512,10 @@ export default function ItineraryScreen() {
       </View>
     );
   }
+
+  // #endregion
+
+  // #region Rendering
 
   return (
     <DraggableFlatList
@@ -465,6 +535,8 @@ export default function ItineraryScreen() {
         }
       }}
       
+      // #region Itinerary Preference Header
+
       ListHeaderComponent={() => (
         <View style={styles.container}>
           <Text style={styles.heading}>YOUR ITINERARY</Text>
@@ -489,12 +561,19 @@ export default function ItineraryScreen() {
         </View>
       )}
 
+      // #endregion
+
+      // #region Render Each Venue
+
       renderItem={({ item: venue, getIndex, drag, isActive }: RenderItemParams<typeof venues[0]>) => {
         const index = getIndex() ?? 0;
-        const leg = routeLegs[index];
+        const leg = routeLegs[index];  
+
         return (
           <ScaleDecorator>
             <View>
+
+          {/* #region ROUTE LEGS */}
 
             {routeLegs[index] && (
               <View style={styles.legBar}>
@@ -536,6 +615,10 @@ export default function ItineraryScreen() {
               </View>
             )}
 
+          {/* #endregion */}            
+
+            {/* #region VENUE CARD */}
+
               <TouchableOpacity
                 onLongPress={drag}
                 delayLongPress={200}
@@ -550,14 +633,38 @@ export default function ItineraryScreen() {
                 </View>
 
                 <View style={styles.venueContent}>
-                  <Text style={styles.venueName}>{venue.name}</Text>
+
+                  <View style={styles.venueNameRow}>
+                    <TouchableOpacity onPress={() => toggleVenueLock(index)}>
+                      <View style={[styles.venueLockCircle, venue.locked && styles.venueLockCircleActive]}>
+                        <Ionicons name={venue.locked ? "lock-closed" : "lock-open"} size={16} color="#fff" />
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.venueName}>{venue.name}</Text>
+                  </View>           
+                  
                   <Text style={styles.venueAddress}>{venue.address}</Text>
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   <Text style={styles.venueHours}>🕐 {venue.hours}</Text>
+                  
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeVenue(index)}
+                  >
+                    <Ionicons name="remove-circle" size={14} color="#7b241c" />
+                    <Text style={styles.removeButtonText}>REMOVE</Text>
+                  </TouchableOpacity>                  
                 </View>
 
+            {/* #endregion */}
+
+              {/* #region TIME BLOCKS */}
+
                 {timeBlocks[index] && (
+
                   <View style={styles.timeBlock}>
+                    
+                  {/* #region Schedule Lock */}
                     <TouchableOpacity 
                       onPress={(e) => {
                         e.stopPropagation(); 
@@ -572,7 +679,9 @@ export default function ItineraryScreen() {
                         />
                       </View>
                     </TouchableOpacity>
+                  {/* #endregion */}
 
+                  {/* #region Arrival Time */}
                     <View style={styles.timeBlockTimeContainer}>
                       <TouchableOpacity onPress={() => applyTimeChange(index, "arrival", parseTime(timeBlocks[index].arrivalTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
@@ -589,7 +698,9 @@ export default function ItineraryScreen() {
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
+                  {/* #endregion */}
 
+                  {/* #region Departure Time */}
                     <View style={[styles.timeBlockTimeContainer, { marginBottom: 3 }]}>
                       <TouchableOpacity onPress={() => applyTimeChange(index, "departure", parseTime(timeBlocks[index].departureTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
@@ -606,23 +717,44 @@ export default function ItineraryScreen() {
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
+                  {/* #endregion */}
 
+                  {/* #region Duration */}
                     <Text style={[styles.timeBlockDuration, timeBlocks[index].locked && { color: "#2d9e5f", fontWeight: "900" }]}>
                       {formatDuration(timeBlocks[index].durationMinutes)}
                     </Text>
+                  {/* #endregion */}
+
                   </View>
                 )}
+
+              {/* #endregion */}
+
               </TouchableOpacity>
+
             </View>
           </ScaleDecorator>
         );
       }}
+
+      // #endregion
+
       contentContainerStyle={{ paddingBottom: 48 }}
     />
   );
+
+  // #endregion
+  
 }
 
+// #endregion
+
+// #region Styles
+
 const styles = StyleSheet.create({
+
+  // #region General Layout
+
   container: {
     padding: 24,
   },
@@ -655,6 +787,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+
+  // #endregion
+
+  // #region Preferences Header
+
   heading: {
     fontSize: 24,
     fontWeight: "bold",
@@ -696,15 +833,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 8,
   },
+
+  // #endregion
+
+  // #region Venue Info
+
   dragHandle: {
     fontSize: 24,
     color: "#aaa",
-    marginTop: 14,
+    marginTop: 20,
   },
   dragHandleContainer: {
     alignItems: "center",
     marginRight: 6,
   },
+
   venueCard: {
     flexDirection: "row",
     marginBottom: 20,
@@ -730,10 +873,28 @@ const styles = StyleSheet.create({
   venueContent: {
     flex: 1,
   },
+
+  venueNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+    gap: 6,
+  },
   venueName: {
     fontSize: 17,
     fontWeight: "700",
-    marginBottom: 2,
+    flex: 1,
+  },
+  venueLockCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#b0bdb0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  venueLockCircleActive: {
+    backgroundColor: "#2d9e5f",
   },
   venueAddress: {
     fontSize: 13,
@@ -744,18 +905,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#444",
     lineHeight: 20,
-    marginBottom: 6,
+    marginBottom: 3,
   },
   venueHours: {
     fontSize: 13,
     color: "#666",
   },
-  venueTimeBlock: {
-  fontSize: 13,
-  fontWeight: "600",
-  color: "#333",
-  marginTop: 4,
+
+  removeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#7b241c",
+    borderRadius: 20,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    marginTop: 6,
+    gap: 3,
   },
+  removeButtonText: {
+    color: "#7b241c",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+
+  // #endregion
+
+  // #region Time Block
+
   timeBlock: {
     alignItems: "center",
     justifyContent: "center",
@@ -799,6 +979,15 @@ const styles = StyleSheet.create({
     color: "#555",
     textAlign: "center",
   },
+    timeBlockTimeLocked: {
+    color: "#2d9e5f",
+    fontWeight: "900",
+  },
+
+  // #endregion
+
+  // #region Venue & Schedule Lock
+
   lockButton: {
   marginBottom: 4,
   },
@@ -816,10 +1005,11 @@ const styles = StyleSheet.create({
   lockIcon: {
     fontSize: 12,
   },
-  timeBlockTimeLocked: {
-    color: "#2d9e5f",
-    fontWeight: "900",
-  },
+
+  // #endregion
+
+  // #region Leg Mode Bar
+
   legBar: {
     marginLeft: 0,
     marginBottom: 12,
@@ -863,6 +1053,11 @@ const styles = StyleSheet.create({
     color: "#333",
     fontWeight: "700",
   },
+
+  // #endregion
+
+  // #region Regeneration Button
+
   regenerateButton: {
     borderWidth: 1.5,
     borderColor: "#000",
@@ -876,4 +1071,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#000",
   },
+
+  // #endregion
+
 });
+
+// #endregion
