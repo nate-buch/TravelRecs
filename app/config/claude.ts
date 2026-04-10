@@ -91,7 +91,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
     "name": "Exact venue name from the list above",
     "justification": "One sentence tailored to their preferences and why NOW is a good time to visit",
     "hours": "Opening hours if known, otherwise Verify before visiting",
-    "venueType": "one of: coffee_shop, restaurant, museum, bar, park_viewpoint, live_music, attraction_landmark, art_gallery, market, nightclub, brewery"
+    "venueType": "one of: coffee_shop, restaurant, street_food, museum, bar, park_viewpoint, live_music, attraction_landmark, art_gallery, market, nightclub, brewery, cultural_heritage"
   }
 ]`
   ;

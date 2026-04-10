@@ -9,7 +9,9 @@ export type VenueType =
   | "art_gallery"
   | "market"
   | "nightclub"
-  | "brewery";
+  | "brewery"
+  | "street_food"
+  | "cultural_heritage";
 
 export type Pace = "fast" | "medium" | "slow";
 
@@ -25,6 +27,8 @@ const DURATIONS: Record<VenueType, Record<Pace, number>> = {
   market:              { fast: 30,  medium: 30,  slow: 45  },
   nightclub:           { fast: 60,  medium: 90,  slow: 120 },
   brewery:             { fast: 30,  medium: 45,  slow: 60  },
+  street_food:         { fast: 15,  medium: 15,  slow: 15  },
+  cultural_heritage:   { fast: 15,  medium: 30,  slow: 45  },
 };
 
 export const getPace = (pace: string): Pace => {

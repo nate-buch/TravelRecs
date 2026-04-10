@@ -22,10 +22,12 @@ export type TimeBlock = {
 const parseTime = (timeStr: string): Date => {
   const [time, ampm] = timeStr.split(" ");
   const [hours, minutes] = time.split(":").map(Number);
-  const date = new Date();
+  const date = new Date(2000, 0, 1); // fixed reference date — Jan 1 2000
   let h = hours;
-  if (ampm === "AM" && hours === 12) h = 0;      // 12:00 AM = midnight = 0
-  else if (ampm === "PM" && hours !== 12) h = hours + 12;  // 1-11 PM = 13-23
+  if (ampm === "AM" && hours === 12) h = 0;
+  else if (ampm === "PM" && hours !== 12) h = hours + 12;
+  // If midnight or later, bump to next day so it's always after evening times
+  if (h < 4) date.setDate(2);
   date.setHours(h, minutes, 0, 0);
   return date;
 };

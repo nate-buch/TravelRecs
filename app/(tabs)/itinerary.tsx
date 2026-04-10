@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
@@ -11,7 +12,6 @@ import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatTime, roundToQuarter } from "../config/durations";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // #endregion
 
@@ -27,10 +27,12 @@ const formatDuration = (minutes: number): string => {
 const parseTime = (timeStr: string): Date => {
   const [time, ampm] = timeStr.split(" ");
   const [hours, minutes] = time.split(":").map(Number);
-  const date = new Date();
+  const date = new Date(2000, 0, 1); // fixed reference date — Jan 1 2000
   let h = hours;
-  if (ampm === "AM" && hours === 12) h = 0;      // 12:00 AM = midnight = 0
-  else if (ampm === "PM" && hours !== 12) h = hours + 12;  // 1-11 PM = 13-23
+  if (ampm === "AM" && hours === 12) h = 0;
+  else if (ampm === "PM" && hours !== 12) h = hours + 12;
+  // If midnight or later, bump to next day so it's always after evening times
+  if (h < 4) date.setDate(2);
   date.setHours(h, minutes, 0, 0);
   return date;
 };
