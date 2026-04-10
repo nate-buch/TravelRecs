@@ -11,6 +11,7 @@ import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
+import { formatDuration } from "../config/durations";
 import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
@@ -358,7 +359,7 @@ export default function MapScreen() {
                     coordinates: [venue.longitude, venue.latitude],
                   },
                   properties: {
-                    label: `Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `\nDrive: ${leg.drivingDuration} min` : ""}`,
+                    label: `Walk: ${formatDuration(leg.walkingDuration)}${leg.drivingDuration ? `\nDrive: ${formatDuration(leg.drivingDuration)}` : ""}`,
                     color: LEG_COLORS[index % LEG_COLORS.length],
                   },
                 };

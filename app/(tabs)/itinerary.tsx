@@ -9,20 +9,13 @@ import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
-import { formatTime, roundToQuarter } from "../config/durations";
+import { formatDuration, formatTime, roundToQuarter } from "../config/durations";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
 
 // #endregion
 
 // #region Types and constants
-
-const formatDuration = (minutes: number): string => {
-  if (minutes < 60) return `~${minutes}min`;
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `~${hrs}hr ${mins}min` : `~${hrs}hr`;
-};
 
 const parseTime = (timeStr: string): Date => {
   const [time, ampm] = timeStr.split(" ");
@@ -47,9 +40,9 @@ export default function ItineraryScreen() {
   
   const {
     venues, time, pace, budget, routeLegs,
-    setVenues, setRouteLegs, setTimeBlocks,
+    setVenues, setRouteLegs, setTimeBlocks, setItinerary,
     location, timeBlocks, legModes, setLegModes,
-    pendingVenues, addRemovedVenueName,
+    addRemovedVenueName,
   } = useAppStore();
 
   const insets = useSafeAreaInsets();
@@ -113,9 +106,12 @@ export default function ItineraryScreen() {
         [location.longitude, location.latitude],
         nonPending
       );
+      
       setRouteLegs(legs);
+
       const modes = legs.map((leg, i) => newLegModes[i] ?? getDefaultMode(leg, pace));
       setLegModes(modes);
+
       const blocks = recalculateSchedule(nonPending, legs, newTimeBlocks, nonPending, newLegModes);
       setTimeBlocks(blocks);
     } else {
@@ -569,19 +565,28 @@ export default function ItineraryScreen() {
   if (venues.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>No itinerary yet</Text>
-        <Text style={styles.emptySubtitle}>Head to the map to generate your day</Text>
-        <TouchableOpacity
-          style={styles.mapButton}
-          onPress={() => router.push("/(tabs)/map")}
-        >
-          <Text style={styles.mapButtonText}>Go to map</Text>
-        </TouchableOpacity>
+        <VenueSearchBar
+          cameraCenter={null}
+          onSelect={handleSearchSelect}
+          placeholder="Search for a venue to add..."
+        />
+        <View style={styles.emptyMessageContainer}>
+          <Text style={styles.emptyTitle}>Your Itinerary Is Empty</Text>
+          <Text style={styles.emptySubtitle}>
+            Generate an itinerary on the Map, or add your stops manually by searching above!
+          </Text>
+          <TouchableOpacity
+            style={styles.mapButton}
+            onPress={() => router.push("/(tabs)/map")}
+          >
+            <Text style={styles.mapButtonText}>Go to Map</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
-  // #endregion
+  // #endregion 
 
   // #region Rendering
 
@@ -622,17 +627,16 @@ export default function ItineraryScreen() {
       data={venues}
       keyExtractor={(item, index) => `${item.name}-${index}`}
       onDragEnd={async ({ data, from, to }) => {
-        // The dragged venue is at the `to` index in the new array
         const draggedVenue = data[to];
 
-        // Only mark as placed if it was a pending venue deliberately moved
+        // Ignore spurious fires (e.g. from button taps) unless a pending venue is being placed
+        if (from === to && !venues[from]?.pending) return;
+
+        // Flip pending → placed if a pending venue was deliberately dragged into position
         const updated = draggedVenue?.pending
           ? data.map(v => v.name === draggedVenue.name ? { ...v, pending: false } : v)
           : data;
 
-        setVenues(updated);
-
-        // Derive nonPending from the fully updated array
         const nonPending = updated.filter(v => !v.pending);
 
         if (location && nonPending.length > 0) {
@@ -640,13 +644,14 @@ export default function ItineraryScreen() {
             [location.longitude, location.latitude],
             nonPending
           );
-          setRouteLegs(legs);
-          const newModes = legs.map((leg) => getDefaultMode(leg, pace));
-          setLegModes(newModes);
-          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, legModes);
-          setTimeBlocks(blocks);
-        }
 
+          const newModes = legs.map((leg) => getDefaultMode(leg, pace));
+
+          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, newModes);
+          setItinerary(updated, legs, newModes, blocks);
+        } else {
+          setVenues(updated);
+        }
       }}
 
       // #region Render Each Venue
@@ -720,7 +725,7 @@ export default function ItineraryScreen() {
                       styles.legBarText,
                       legModes[nonPendingIndex] === "walking" && styles.legBarTextSelected,
                     ]}>
-                      {`Walk: ${leg.walkingDuration} min`}
+                      {`Walk: ${formatDuration(leg.walkingDuration)}`}
                     </Text>
                   </TouchableOpacity>
 
@@ -736,7 +741,7 @@ export default function ItineraryScreen() {
                         styles.legBarText,
                         legModes[nonPendingIndex] === "driving" && styles.legBarTextSelected,
                       ]}>
-                        {`Drive: ${leg.drivingDuration} min`}
+                        {`Drive: ${formatDuration(leg.drivingDuration ?? 0)}`}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -851,7 +856,7 @@ export default function ItineraryScreen() {
 
                   {/* #region Duration */}
                     <Text style={[styles.timeBlockDuration, timeBlocks[nonPendingIndex].locked && { color: "#2d9e5f", fontWeight: "900" }]}>
-                      {formatDuration(timeBlocks[nonPendingIndex].durationMinutes)}
+                      {`~${formatDuration(timeBlocks[nonPendingIndex].durationMinutes)}`}
                     </Text>
                   {/* #endregion */}
 
@@ -893,8 +898,6 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     padding: 32,
   },
   emptyTitle: {
@@ -907,6 +910,12 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 32,
     textAlign: "center",
+  },
+  emptyMessageContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 25,
   },
   mapButton: {
     backgroundColor: "#000",

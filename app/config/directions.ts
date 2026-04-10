@@ -11,6 +11,7 @@ export type RouteLeg = {
 export const getDefaultMode = (leg: RouteLeg, pace: string): "walking" | "driving" => {
   if (!leg.drivingDuration) return "walking";
   if (pace.toLowerCase().includes("hustle")) return "driving";
+  if (leg.walkingDuration > 30) return "driving";
   if (pace.toLowerCase().includes("easy")) return "walking";
   return leg.walkingDuration <= 15 ? "walking" : "driving";
 };

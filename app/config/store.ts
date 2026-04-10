@@ -50,12 +50,13 @@ type AppStore = {
   setVenues: (venues: Venue[]) => void;
   setRouteLegs: (legs: RouteLeg[]) => void;
   setTimeBlocks: (blocks: TimeBlock[]) => void;
-  setLockedBlocks: (locked: boolean[]) => void;
   setLegModes: (modes: ("walking" | "driving")[]) => void;
+  setItinerary: (venues: Venue[], legs: RouteLeg[], modes: ("walking" | "driving")[], blocks: TimeBlock[]) => void;
 
   // Removal tracking — addRemovedVenueName silently ignores already-tracked names
   addRemovedVenueName: (name: string) => void;
   clearRemovedVenueNames: () => void;
+  
 };
 
 // #endregion
@@ -80,7 +81,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   legModes: [],
 
   // ─── Venue Additions and Removals ────────────────────────────────────────
-  pendingVenues: [],
   removedVenueNames: [],
 
   // ─── Actions ─────────────────────────────────────────────────────────────
@@ -93,8 +93,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setVenues: (venues) => set({ venues }),
   setRouteLegs: (legs) => set({ routeLegs: legs }),
   setTimeBlocks: (blocks) => set({ timeBlocks: blocks }),
-  setLockedBlocks: (locked) => set({ lockedBlocks: locked }),
   setLegModes: (modes) => set({ legModes: modes }),
+  setItinerary: (venues, legs, modes, blocks) => set({ venues, routeLegs: legs, legModes: modes, timeBlocks: blocks }),
+
 
   // Removal tracking
   addRemovedVenueName: (name) => {
