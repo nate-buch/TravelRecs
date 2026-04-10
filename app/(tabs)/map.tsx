@@ -315,27 +315,9 @@ export default function MapScreen() {
 
     {/* #region Route Legs */}
 
-      {routeLegs.map((leg, index) => {
-        const nonPending = venues.filter(v => !v.pending);
-        const venue = nonPending[index];
-        if (!venue) return null;
-        return (
-          <MapboxGL.ShapeSource
-            key={`leg-${index}`}
-            id={`leg-${index}`}
-            shape={{ type: "Feature", geometry: { type: "LineString", coordinates: leg.walkingCoordinates }, properties: {} }}
-          >
-            <MapboxGL.LineLayer
-              id={`leg-line-${index}`}
-              style={{ lineColor: LEG_COLORS[index % LEG_COLORS.length], lineWidth: 3, lineDasharray: [2, 2] }}
-            />
-          </MapboxGL.ShapeSource>
-        );
-      })}
-
-      {routeLegs.length > 0 && (
+      <>
         <MapboxGL.ShapeSource
-          id="legLabels"
+          id="allLegs"
           shape={{
             type: "FeatureCollection",
             features: routeLegs.map((leg, index) => {
@@ -344,20 +326,48 @@ export default function MapScreen() {
               if (!venue) return null;
               return {
                 type: "Feature",
-                geometry: {
-                  type: "Point",
-                  coordinates: [venue.longitude, venue.latitude],
-                },
-                properties: {
-                  label: `Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `\nDrive: ${leg.drivingDuration} min` : ""}`,
-                  color: LEG_COLORS[index % LEG_COLORS.length],
-                },
+                geometry: { type: "LineString", coordinates: leg.walkingCoordinates },
+                properties: { index, color: LEG_COLORS[index % LEG_COLORS.length] },
               };
             }).filter(Boolean) as any,
           }}
         >
-          <MapboxGL.SymbolLayer
-            id="legLabelsLayer"
+          <MapboxGL.LineLayer
+            id="allLegsLine"
+            style={{
+              lineColor: ["get", "color"],
+              lineWidth: 3,
+              lineDasharray: [2, 2],
+            }}
+          />
+        </MapboxGL.ShapeSource>
+
+        {routeLegs.length > 0 && (
+          <MapboxGL.ShapeSource
+            id="legLabels"
+            shape={{
+              type: "FeatureCollection",
+              features: routeLegs.map((leg, index) => {
+                const nonPending = venues.filter(v => !v.pending);
+                const venue = nonPending[index];
+                if (!venue) return null;
+                return {
+                  type: "Feature",
+                  geometry: {
+                    type: "Point",
+                    coordinates: [venue.longitude, venue.latitude],
+                  },
+                  properties: {
+                    label: `Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `\nDrive: ${leg.drivingDuration} min` : ""}`,
+                    color: LEG_COLORS[index % LEG_COLORS.length],
+                  },
+                };
+              }).filter(Boolean) as any,
+            }}
+          >
+            <MapboxGL.SymbolLayer
+              id="legLabelsLayer"
+              aboveLayerID="allLegsLine"
               style={{
                 textField: ["get", "label"],
                 textSize: 12,
@@ -370,9 +380,12 @@ export default function MapScreen() {
                 textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
                 textMaxWidth: 8,
               }}
-          />
-        </MapboxGL.ShapeSource>
-      )}
+            />
+          </MapboxGL.ShapeSource>
+        )}
+      </>
+
+      {/* #endregion */}
 
     {/* #region Venue Names and Times */}
 
@@ -460,6 +473,7 @@ export default function MapScreen() {
       >
         <MapboxGL.CircleLayer
           id="pendingVenueCircles"
+          aboveLayerID="allLegsLine"
           style={{
             circleRadius: 12,
             circleColor: PENDING_MARKER_COLOR,
