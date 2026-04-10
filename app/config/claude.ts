@@ -141,6 +141,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
         hours: item.hours,
         types: match?.types ?? [],
         venueType: item.venueType,
+        pending: false,
       };
     }).filter(v => v.latitude !== 0);
   } catch {

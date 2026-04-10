@@ -339,7 +339,6 @@ export default function ItineraryScreen() {
         // Moving arrival later — simple forward cascade
         for (let i = index; i < blocks.length; i++) {
           if (i > index && timeBlocks[i].locked) continue;
-          if (venues[i]?.pending) continue;
           const arr = parseTime(blocks[i].arrivalTime);
           const dep = parseTime(blocks[i].departureTime);
           arr.setMinutes(arr.getMinutes() + deltaMins);
@@ -611,8 +610,7 @@ export default function ItineraryScreen() {
           const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, legModes);
           setTimeBlocks(blocks);
         }
-
-      console.log("onDragEnd data:", JSON.stringify(data.map(v => ({ name: v.name, pending: v.pending }))))
+        
       }}
       
       // #region Itinerary Preference Header
@@ -651,14 +649,7 @@ export default function ItineraryScreen() {
 
       renderItem={({ item: venue, getIndex, drag, isActive }: RenderItemParams<typeof venues[0]>) => {
         const index = getIndex() ?? 0;
-        const displayIndex = venues
-          .filter(v => !v.pending)
-          .findIndex(v => v.name === venue.name);
-        const nonPendingIndex = venues
-          .filter(v => !v.pending)
-          .findIndex(v => v.name === venue.name);
-        const leg = routeLegs[nonPendingIndex];
-
+        
         if (venue.pending) {
           return (
             <ScaleDecorator>
@@ -694,46 +685,22 @@ export default function ItineraryScreen() {
               </TouchableOpacity>
             </ScaleDecorator>
           );
-        }  
+        }          
+        
+        const displayIndex = venues
+          .filter(v => !v.pending)
+          .findIndex(v => v.name === venue.name);
+        const nonPendingIndex = venues
+          .filter(v => !v.pending)
+          .findIndex(v => v.name === venue.name);
+        const leg = routeLegs[nonPendingIndex];
 
+        console.log("renderItem", venue.name, "index:", index, "nonPendingIndex:", nonPendingIndex, "timeBlocks length:", timeBlocks.length, "pending:", venue.pending);
+
+        
         return (
           <ScaleDecorator>
             <View>
-
-          {/* #region PENDING VENUES */}
-            
-            {index === 0 && pendingVenues.length > 0 && (
-              <>
-                {pendingVenues.map((pending) => (
-                  <View key={pending.name} style={styles.stagingCard}>
-                    <View style={styles.dragHandleContainer}>
-                      <View style={styles.pendingMarker}>
-                        <Text style={styles.pendingMarkerText}>?</Text>
-                      </View>
-                      <Text style={styles.dragHandle}>☰</Text>
-                    </View>
-                    <View style={styles.venueContent}>
-                      <Text style={styles.pendingVenueName}>{pending.name}</Text>
-                      <Text style={styles.venueAddress}>{pending.address}</Text>
-                      <Text style={styles.pendingHint}>
-                        Drag me into position to add to your route!
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => {
-                          addRemovedVenueName(venue.name);
-                          setVenues(venues.filter(v => v.name !== venue.name));
-                        }}
-                      >
-                        <Ionicons name="remove-circle" size={14} color="#7b241c" />
-                        <Text style={styles.removeButtonText}>REMOVE</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-                <View style={styles.pendingSectionDivider} />
-              </>
-            )}
 
           {/* #region ROUTE LEGS */}
 
@@ -742,15 +709,15 @@ export default function ItineraryScreen() {
                 <View style={styles.legDivider} />
                 <View style={styles.legModeRow}>
                   <TouchableOpacity
-                    onPress={() => toggleLegMode(index)}
+                    onPress={() => toggleLegMode(nonPendingIndex)}
                     style={[
                       styles.legModeOption,
-                      legModes[index] === "walking" && styles.legModeSelected,
+                      legModes[nonPendingIndex] === "walking" && styles.legModeSelected,
                     ]}
                   >
                     <Text style={[
                       styles.legBarText,
-                      legModes[index] === "walking" && styles.legBarTextSelected,
+                      legModes[nonPendingIndex] === "walking" && styles.legBarTextSelected,
                     ]}>
                       {`Walk: ${leg.walkingDuration} min`}
                     </Text>
@@ -758,15 +725,15 @@ export default function ItineraryScreen() {
 
                   {leg.drivingDuration && (
                     <TouchableOpacity
-                      onPress={() => toggleLegMode(index)}
+                      onPress={() => toggleLegMode(nonPendingIndex)}
                       style={[
                         styles.legModeOption,
-                        legModes[index] === "driving" && styles.legModeSelected,
+                        legModes[nonPendingIndex] === "driving" && styles.legModeSelected,
                       ]}
                     >
                       <Text style={[
                         styles.legBarText,
-                        legModes[index] === "driving" && styles.legBarTextSelected,
+                        legModes[nonPendingIndex] === "driving" && styles.legBarTextSelected,
                       ]}>
                         {`Drive: ${leg.drivingDuration} min`}
                       </Text>
@@ -822,7 +789,7 @@ export default function ItineraryScreen() {
 
               {/* #region TIME BLOCKS */}
 
-                {timeBlocks[index] && (
+                {timeBlocks[nonPendingIndex] && (
 
                   <View style={styles.timeBlock}>
                     
@@ -833,9 +800,9 @@ export default function ItineraryScreen() {
                         toggleLock(index); 
                       }}
                       style={styles.lockButton}>
-                      <View style={[styles.lockCircle, timeBlocks[index].locked && styles.lockCircleActive]}>
+                      <View style={[styles.lockCircle, timeBlocks[nonPendingIndex].locked && styles.lockCircleActive]}>
                         <Ionicons 
-                          name={timeBlocks[index].locked ? "lock-closed" : "lock-open"} 
+                          name={timeBlocks[nonPendingIndex].locked ? "lock-closed" : "lock-open"} 
                           size={16} 
                           color="#fff"
                         />
@@ -845,18 +812,18 @@ export default function ItineraryScreen() {
 
                   {/* #region Arrival Time */}
                     <View style={styles.timeBlockTimeContainer}>
-                      <TouchableOpacity onPress={() => applyTimeChange(index, "arrival", parseTime(timeBlocks[index].arrivalTime), -1)}>
+                      <TouchableOpacity onPress={() => applyTimeChange(nonPendingIndex, "arrival", parseTime(timeBlocks[nonPendingIndex].arrivalTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
                       </TouchableOpacity>
                       <View style={{ alignItems: "center", width: 44 }}>
-                        <Text style={[styles.timeBlockTime, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
-                          {timeBlocks[index].arrivalTime.split(' ')[0]}
+                        <Text style={[styles.timeBlockTime, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[nonPendingIndex].arrivalTime.split(' ')[0]}
                         </Text>
-                        <Text style={[styles.timeBlockAmPm, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
-                          {timeBlocks[index].arrivalTime.split(' ')[1]}
+                        <Text style={[styles.timeBlockAmPm, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[nonPendingIndex].arrivalTime.split(' ')[1]}
                         </Text>
                       </View>
-                      <TouchableOpacity onPress={() => applyTimeChange(index, "arrival", parseTime(timeBlocks[index].arrivalTime), 1)}>
+                      <TouchableOpacity onPress={() => applyTimeChange(nonPendingIndex, "arrival", parseTime(timeBlocks[nonPendingIndex].arrivalTime), 1)}>
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
@@ -864,26 +831,26 @@ export default function ItineraryScreen() {
 
                   {/* #region Departure Time */}
                     <View style={[styles.timeBlockTimeContainer, { marginBottom: 3 }]}>
-                      <TouchableOpacity onPress={() => applyTimeChange(index, "departure", parseTime(timeBlocks[index].departureTime), -1)}>
+                      <TouchableOpacity onPress={() => applyTimeChange(nonPendingIndex, "departure", parseTime(timeBlocks[nonPendingIndex].departureTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
                       </TouchableOpacity>
                       <View style={{ alignItems: "center", width: 44 }}>
-                        <Text style={[styles.timeBlockTime, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
-                          {timeBlocks[index].departureTime.split(' ')[0]}
+                        <Text style={[styles.timeBlockTime, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[nonPendingIndex].departureTime.split(' ')[0]}
                         </Text>
-                        <Text style={[styles.timeBlockAmPm, timeBlocks[index].locked && styles.timeBlockTimeLocked]}>
-                          {timeBlocks[index].departureTime.split(' ')[1]}
+                        <Text style={[styles.timeBlockAmPm, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                          {timeBlocks[nonPendingIndex].departureTime.split(' ')[1]}
                         </Text>
                       </View>
-                      <TouchableOpacity onPress={() => applyTimeChange(index, "departure", parseTime(timeBlocks[index].departureTime), 1)}>
+                      <TouchableOpacity onPress={() => applyTimeChange(nonPendingIndex, "departure", parseTime(timeBlocks[nonPendingIndex].departureTime), 1)}>
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
                   {/* #endregion */}
 
                   {/* #region Duration */}
-                    <Text style={[styles.timeBlockDuration, timeBlocks[index].locked && { color: "#2d9e5f", fontWeight: "900" }]}>
-                      {formatDuration(timeBlocks[index].durationMinutes)}
+                    <Text style={[styles.timeBlockDuration, timeBlocks[nonPendingIndex].locked && { color: "#2d9e5f", fontWeight: "900" }]}>
+                      {formatDuration(timeBlocks[nonPendingIndex].durationMinutes)}
                     </Text>
                   {/* #endregion */}
 
