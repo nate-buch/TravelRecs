@@ -11,6 +11,7 @@ import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatTime, roundToQuarter } from "../config/durations";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // #endregion
 
@@ -48,6 +49,8 @@ export default function ItineraryScreen() {
     location, timeBlocks, legModes, setLegModes,
     pendingVenues, addRemovedVenueName,
   } = useAppStore();
+
+  const insets = useSafeAreaInsets();
 
   // #endregion
 
@@ -581,10 +584,41 @@ export default function ItineraryScreen() {
   // #region Rendering
 
   return (
+    <View style={{ flex: 1 }}>
+
+      {/* #region Itinerary Preference Header */}
+
+      <View style={styles.container}>
+        <Text style={styles.heading}>YOUR ITINERARY</Text>
+        <View style={styles.prefsRow}>
+          <View style={styles.prefItem}>
+            <Text style={styles.prefsLabel}>TRIP LENGTH</Text>
+            <Text style={styles.prefTag}>{time}</Text>
+          </View>
+          <Text style={styles.prefDivider}>|</Text>
+          <View style={styles.prefItem}>
+            <Text style={styles.prefsLabel}>SPEED</Text>
+            <Text style={styles.prefTag}>{pace}</Text>
+          </View>
+          <Text style={styles.prefDivider}>|</Text>
+          <View style={styles.prefItem}>
+            <Text style={styles.prefsLabel}>BUDGET</Text>
+            <Text style={styles.prefTag}>{budget}</Text>
+          </View>
+        </View>
+        <View style={styles.sectionDivider} />
+        <VenueSearchBar
+          cameraCenter={null}
+          onSelect={handleSearchSelect}
+          placeholder="Search for a venue to add..."
+        />
+      </View>
+
+      {/* #endregion */}
+
     <DraggableFlatList
       data={venues}
       keyExtractor={(item, index) => `${item.name}-${index}`}
-      
       onDragEnd={async ({ data, from, to }) => {
         // The dragged venue is at the `to` index in the new array
         const draggedVenue = data[to];
@@ -610,40 +644,8 @@ export default function ItineraryScreen() {
           const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, legModes);
           setTimeBlocks(blocks);
         }
-        
+
       }}
-      
-      // #region Itinerary Preference Header
-
-      ListHeaderComponent={() => (
-        <View style={styles.container}>
-          <Text style={styles.heading}>YOUR ITINERARY</Text>
-          <View style={styles.prefsRow}>
-            <View style={styles.prefItem}>
-              <Text style={styles.prefsLabel}>TRIP LENGTH</Text>
-              <Text style={styles.prefTag}>{time}</Text>
-            </View>
-            <Text style={styles.prefDivider}>|</Text>
-            <View style={styles.prefItem}>
-              <Text style={styles.prefsLabel}>SPEED</Text>
-              <Text style={styles.prefTag}>{pace}</Text>
-            </View>
-            <Text style={styles.prefDivider}>|</Text>
-            <View style={styles.prefItem}>
-              <Text style={styles.prefsLabel}>BUDGET</Text>
-              <Text style={styles.prefTag}>{budget}</Text>
-            </View>
-          </View>
-          <View style={styles.sectionDivider} />
-            <VenueSearchBar
-              cameraCenter={null}
-              onSelect={handleSearchSelect}
-              placeholder="Search for a venue to add..."
-            />
-        </View>
-      )}
-
-      // #endregion
 
       // #region Render Each Venue
 
@@ -695,9 +697,6 @@ export default function ItineraryScreen() {
           .findIndex(v => v.name === venue.name);
         const leg = routeLegs[nonPendingIndex];
 
-        console.log("renderItem", venue.name, "index:", index, "nonPendingIndex:", nonPendingIndex, "timeBlocks length:", timeBlocks.length, "pending:", venue.pending);
-
-        
         return (
           <ScaleDecorator>
             <View>
@@ -868,8 +867,11 @@ export default function ItineraryScreen() {
 
       // #endregion
 
-      contentContainerStyle={{ paddingBottom: 48 }}
+      autoscrollThreshold={150}
+      autoscrollSpeed={200}
+      contentContainerStyle={{ paddingBottom: 60 + insets.bottom + 60 }}
     />
+  </View>
   );
 
   // #endregion
