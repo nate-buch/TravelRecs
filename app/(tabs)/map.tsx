@@ -7,6 +7,7 @@ import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
@@ -33,6 +34,18 @@ const getDefaultMode = (leg: RouteLeg, pace: string): "walking" | "driving" => {
   if (pace.toLowerCase().includes("hustle")) return "driving";
   if (pace.toLowerCase().includes("easy")) return "walking";
   return leg.walkingDuration <= 15 ? "walking" : "driving";
+};
+
+const PENDING_MARKER_COLOR = "#888888";
+const PENDING_MARKER_LABEL = "Add to your Itinerary!";
+
+interface SearchResult {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  types: string[];
+  placeId: string;
 };
 
 // #endregion
@@ -80,22 +93,29 @@ export default function MapScreen() {
   
   // #region Store
 
-  const { time, pace, budget, notes, venues, setVenues, setRouteLegs, routeLegs, setLocation: saveLocation, setTimeBlocks, legModes, setLegModes, timeBlocks } = useAppStore();
-
+  const {
+    time, pace, budget, notes,
+    venues, setVenues,
+    setRouteLegs, routeLegs,
+    setLocation: saveLocation,
+    setTimeBlocks, legModes, setLegModes, timeBlocks,
+    addRemovedVenueName, clearRemovedVenueNames,
+  } = useAppStore();
+  
   // #endregion
 
   // #region Local State
 
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const [venueVisible, setVenueVisible] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [locationError, setLocationError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const cameraRef = useRef<MapboxGL.Camera>(null);
 
-  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+  // Tracks the current map camera center for search result biasing
+  const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
 
   useEffect(() => {
     if (selectedVenue) {
@@ -118,60 +138,41 @@ export default function MapScreen() {
       const loc = await Location.getCurrentPositionAsync({});
       setLocation(loc);
       saveLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      setCameraCenter([loc.coords.longitude, loc.coords.latitude]);
     })();
   }, []);
 
   // #endregion
 
-  // #region Itinerary Generation
+  // #region Itinerary Generation (shared logic)
 
-  const handleGenerate = async () => {
-    if (!location) return;
+  const runGeneration = async (coords: { latitude: number; longitude: number }) => {
     setLoading(true);
     setError("");
     setVenues([]);
     setRouteLegs([]);
     try {
-      const nearbyPlaces = await getNearbyPlaces(
-        location.coords.latitude,
-        location.coords.longitude
-      );
+      const nearbyPlaces = await getNearbyPlaces(coords.latitude, coords.longitude);
       const result = await generateItinerary(
-        location.coords.latitude,
-        location.coords.longitude,
-        time || "a full day",
-        pace || "well-paced",
-        budget || "flexible",
-        notes,
-        nearbyPlaces
+        coords.latitude, coords.longitude,
+        time || "a full day", pace || "well-paced", budget || "flexible",
+        notes, nearbyPlaces
       );
-
-      const optimized = optimizeRoute(
-        location.coords.latitude,
-        location.coords.longitude,
-        result
-      );
+      const optimized = optimizeRoute(coords.latitude, coords.longitude, result);
       setVenues(optimized);
-      const legs = await getRouteLegs(
-        [location.coords.longitude, location.coords.latitude],
-        optimized
-      );
+      const legs = await getRouteLegs([coords.longitude, coords.latitude], optimized);
       setRouteLegs(legs);
-      
       const modes = legs.map(leg => getDefaultMode(leg, pace));
       setLegModes(modes);
-      
       const blocks = calculateSchedule(optimized, legs, pace);
       setTimeBlocks(blocks);
-
-      if (result.length > 0 && location) {
-        const lngs = [...result.map(v => v.longitude), location.coords.longitude];
-        const lats = [...result.map(v => v.latitude), location.coords.latitude];
+      if (result.length > 0) {
+        const lngs = [...result.map(v => v.longitude), coords.longitude];
+        const lats = [...result.map(v => v.latitude), coords.latitude];
         cameraRef.current?.fitBounds(
           [Math.min(...lngs), Math.min(...lats)],
           [Math.max(...lngs), Math.max(...lats)],
-          80,
-          500
+          80, 500
         );
       }
     } catch (e: any) {
@@ -183,17 +184,56 @@ export default function MapScreen() {
 
   // #endregion
 
+  // #region Generate New Itinerary
+
+  const handleGenerateNew = async () => {
+    if (!location) return;
+    clearRemovedVenueNames();
+    await runGeneration({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    });
+  };
+
+  // #endregion
+
+  // #region Re-Generate Itinerary (stub — full logic in future sprint)
+
+  const handleReGenerate = async () => {
+    if (!location || venues.length === 0) return;
+    // TODO: pass locked venues, pending venues, and removedVenueNames to Claude
+    await runGeneration({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    });
+  };
+
+  // #endregion
+
+  // #region Add Venue via Search
+
+  const handleSearchSelect = (result: SearchResult) => {
+    const venue: Venue = {
+      name: result.name,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      address: result.address,
+      justification: "",
+      hours: "Verify before visiting",
+      types: result.types,
+      venueType: undefined,
+      locked: true,
+      pending: true,
+    };
+    setVenues([venue, ...venues]);
+    setTimeBlocks([{ arrivalTime: "", departureTime: "", durationMinutes: 0, locked: false }, ...timeBlocks]);
+    setLegModes(["walking", ...legModes]);
+    cameraRef.current?.flyTo([result.longitude, result.latitude], 500);
+  };
+
+  // #endregion
+
   // #region Venue Bottom Sheet Toggle
-
-  const openVenue = () => {
-    setVenueVisible(true);
-    bottomSheetRef.current?.expand();
-  };
-
-  const closeVenue = () => {
-    setVenueVisible(false);
-    bottomSheetRef.current?.close();
-  };
 
   const toggleVenueLockFromMap = (venue: Venue) => {
     const index = venues.findIndex(v => v.name === venue.name);
@@ -208,6 +248,7 @@ export default function MapScreen() {
     const index = venues.findIndex(v => v.name === venue.name);
     if (index === -1) return;
     bottomSheetRef.current?.close();
+    addRemovedVenueName(venue.name);
     const newVenues = venues.filter((_, i) => i !== index);
     const newTimeBlocks = timeBlocks.filter((_, i) => i !== index);
     const newLegModes = legModes.filter((_, i) => i !== index);
@@ -231,239 +272,318 @@ export default function MapScreen() {
 
   // #endregion
 
+  // #region Bottom Sheet — Pending Venue
+
+  const removePendingFromMap = (name: string) => {
+    bottomSheetRef.current?.close();
+    removePendingVenue(name);
+  };
+
+  // #endregion  
+
   // #region Render Itinerary
 
   return (
     <View style={styles.container}>
+
+    {/* #region Search Bar */}
+
+    <View style={styles.searchBarWrapper}>
+      <VenueSearchBar
+        cameraCenter={cameraCenter}
+        onSelect={handleSearchSelect}
+      />
+    </View>   
 
     {/* #region Map and Route */}
 
       <MapboxGL.MapView 
         style={styles.map}
         styleURL="mapbox://styles/flashpackingguide/cmngh698v007501qo9tazbw0c?fresh=true"
+        onCameraChanged={(state) => {
+          const c = state.properties.center;
+          if (c) setCameraCenter([c[0], c[1]]);
+        }}
       >
 
-      {/* #region Camera */}
+    {/* #region Camera */}
 
-        <MapboxGL.Camera
-          ref={cameraRef}
-          zoomLevel={14}
-          centerCoordinate={
-            location
-              ? [location.coords.longitude, location.coords.latitude]
-              : [-97.7431, 30.2672]
-          }
-        />
+      <MapboxGL.Camera
+        ref={cameraRef}
+        zoomLevel={14}
+        centerCoordinate={
+          location
+            ? [location.coords.longitude, location.coords.latitude]
+            : [-97.7431, 30.2672]
+        }
+      />
 
-      {/* #endregion */}
+    {/* #region User Location */}
 
-      {/* #region User Location */}
+      {location && (
+        <MapboxGL.MarkerView
+          coordinate={[location.coords.longitude, location.coords.latitude]}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={styles.userMarker}>
+            <Text style={styles.userMarkerText}>YOU ARE HERE</Text>
+          </View>
+        </MapboxGL.MarkerView>
+      )}
 
-        {location && (
-          <MapboxGL.MarkerView
-            coordinate={[location.coords.longitude, location.coords.latitude]}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={styles.userMarker}>
-              <Text style={styles.userMarkerText}>YOU ARE HERE</Text>
-            </View>
-          </MapboxGL.MarkerView>
-        )}
+    {/* #region Route Legs */}
 
-        {/* #endregion */}
-
-      {/* #region Route Legs */}
-
-        {routeLegs.map((leg, index) => (
+      {routeLegs.map((leg, index) => {
+        const nonPending = venues.filter(v => !v.pending);
+        const venue = nonPending[index];
+        if (!venue) return null;
+        return (
           <MapboxGL.ShapeSource
             key={`leg-${index}`}
             id={`leg-${index}`}
-            shape={{
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: leg.walkingCoordinates,
-              },
-              properties: {},
-            }}
+            shape={{ type: "Feature", geometry: { type: "LineString", coordinates: leg.walkingCoordinates }, properties: {} }}
           >
             <MapboxGL.LineLayer
               id={`leg-line-${index}`}
-              style={{
-                lineColor: LEG_COLORS[index % LEG_COLORS.length],
-                lineWidth: 3,
-                lineDasharray: [2, 2],
-              }}
+              style={{ lineColor: LEG_COLORS[index % LEG_COLORS.length], lineWidth: 3, lineDasharray: [2, 2] }}
             />
           </MapboxGL.ShapeSource>
-        ))}
+        );
+      })}
 
-        {routeLegs.length > 0 && (
-          <MapboxGL.ShapeSource
-            id="legLabels"
-            shape={{
-              type: "FeatureCollection",
-              features: routeLegs.map((leg, index) => {
-                const venue = venues[index];
-                if (!venue) return null;
-                return {
-                  type: "Feature",
-                  geometry: {
-                    type: "Point",
-                    coordinates: [venue.longitude, venue.latitude],
-                  },
-                  properties: {
-                    label: `Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `\nDrive: ${leg.drivingDuration} min` : ""}`,
-                    color: LEG_COLORS[index % LEG_COLORS.length],
-                  },
-                };
-              }).filter(Boolean),
-            }}
-          >
-            <MapboxGL.SymbolLayer
-              id="legLabelsLayer"
-                style={{
-                  textField: ["get", "label"],
-                  textSize: 12,
-                  textColor: ["get", "color"],
-                  textHaloColor: "#ffffff",
-                  textHaloWidth: 2,
-                  textAnchor: "top",
-                  textOffset: [0, 1.2],
-                  symbolSortKey: 1,
-                  textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
-                  textMaxWidth: 8,
-                }}
-            />
-          </MapboxGL.ShapeSource>
-        )}
-
-        {/* #endregion */}
-
-      {/* #region Venue Names and Times */}
-
-        {venues.length > 0 && (
-          <MapboxGL.ShapeSource
-            id="venueNames"
-            shape={{
-              type: "FeatureCollection",
-              features: venues.map((venue, index) => ({
+      {routeLegs.length > 0 && (
+        <MapboxGL.ShapeSource
+          id="legLabels"
+          shape={{
+            type: "FeatureCollection",
+            features: routeLegs.map((leg, index) => {
+              const nonPending = venues.filter(v => !v.pending);
+              const venue = nonPending[index];
+              if (!venue) return null;
+              return {
                 type: "Feature",
                 geometry: {
                   type: "Point",
                   coordinates: [venue.longitude, venue.latitude],
                 },
                 properties: {
-                  name: venue.name,
+                  label: `Walk: ${leg.walkingDuration} min${leg.drivingDuration ? `\nDrive: ${leg.drivingDuration} min` : ""}`,
                   color: LEG_COLORS[index % LEG_COLORS.length],
-                  timeBlock: timeBlocks[index] 
-                    ? `${timeBlocks[index].arrivalTime} – ${timeBlocks[index].departureTime}`
-                    : "",
                 },
-              })),
-            }}
-          >
-            <MapboxGL.SymbolLayer
-              id="venueNamesLayer"
-              aboveLayerID="legLabelsLayer"
+              };
+            }).filter(Boolean) as any,
+          }}
+        >
+          <MapboxGL.SymbolLayer
+            id="legLabelsLayer"
               style={{
-                textField: ["get", "name"],
-                textSize: 16,
-                textColor: ["get", "color"],
-                textHaloColor: "#ffffff",
-                textHaloWidth: 2,
-                textAnchor: "bottom",
-                textOffset: [0, -1.5],
-                textMaxWidth: 10,
-                textAllowOverlap: true,
-                textIgnorePlacement: true,
-                symbolSortKey: 3,
-                textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
-              }}
-            />
-
-            <MapboxGL.SymbolLayer
-              id="venueTimesLayer"
-              aboveLayerID="venueNamesLayer"
-              style={{
-                textField: ["get", "timeBlock"],
+                textField: ["get", "label"],
                 textSize: 12,
                 textColor: ["get", "color"],
                 textHaloColor: "#ffffff",
                 textHaloWidth: 2,
-                textAnchor: "bottom",
-                textOffset: [0, -0.9],
-                textMaxWidth: 12,
-                textAllowOverlap: true,
-                textIgnorePlacement: true,
+                textAnchor: "top",
+                textOffset: [0, 1.2],
+                symbolSortKey: 1,
                 textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
+                textMaxWidth: 8,
               }}
-            />
-          </MapboxGL.ShapeSource>
-        )}
+          />
+        </MapboxGL.ShapeSource>
+      )}
 
-        {/* #endregion */}
+    {/* #region Venue Names and Times */}
 
-      {/* #region Venue Markers */}
+      <MapboxGL.ShapeSource
+        id="venueNames"
+        shape={{
+          type: "FeatureCollection",
+          features: venues
+            .filter(v => !v.pending)
+            .map((venue, i) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [venue.longitude, venue.latitude] },
+              properties: {
+                name: venue.name,
+                color: LEG_COLORS[i % LEG_COLORS.length],
+                timeBlock: timeBlocks[i]
+                  ? `${timeBlocks[i].arrivalTime} – ${timeBlocks[i].departureTime}`
+                  : "",
+              },
+            })),
+        }}
+      >
+        <MapboxGL.SymbolLayer
+          id="venueNamesLayer"
+          aboveLayerID="legLabelsLayer"
+          style={{
+            textField: ["get", "name"],
+            textSize: 16,
+            textColor: ["get", "color"],
+            textHaloColor: "#ffffff",
+            textHaloWidth: 2,
+            textAnchor: "bottom",
+            textOffset: [0, -1.5],
+            textMaxWidth: 10,
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+            symbolSortKey: 3,
+            textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+          }}
+        />
 
-        {venues.length > 0 && (
-          <MapboxGL.ShapeSource
-            id="venueMarkers"
-            shape={{
-              type: "FeatureCollection",
-              features: venues.map((venue, index) => ({
-                type: "Feature",
-                geometry: {
-                  type: "Point",
-                  coordinates: [venue.longitude, venue.latitude],
-                },
-                properties: {
-                  index: index + 1,
-                  color: LEG_COLORS[index % LEG_COLORS.length],
-                },
-              })),
-            }}
-            onPress={(e) => {
-              const feature = e.features[0];
-              if (!feature) return;
-              const idx = (feature.properties?.index ?? 1) - 1;
-              const tappedVenue = venues[idx];
-              if (tappedVenue) {
-                setSelectedVenue(tappedVenue);
-                bottomSheetRef.current?.expand();
-              }
-            }}
-          >
-            <MapboxGL.CircleLayer
-              id="venueCircles"
-              aboveLayerID="legLabelsLayer"
-              style={{
-                circleRadius: 12,
-                circleColor: ["get", "color"],
-                circleStrokeWidth: 2,
-                circleStrokeColor: "#ffffff",
-              }}
-            />
-            <MapboxGL.SymbolLayer
-              id="venueNumbers"
-              aboveLayerID="venueCircles"
-              style={{
-                textField: ["to-string", ["get", "index"]],
-                textSize: 15,
-                textColor: "#ffffff",
-                textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
-                textAllowOverlap: true,
-                textIgnorePlacement: true,
-              }}
-            />
-          </MapboxGL.ShapeSource>
-        )}
+        <MapboxGL.SymbolLayer
+          id="venueTimesLayer"
+          aboveLayerID="venueNamesLayer"
+          style={{
+            textField: ["get", "timeBlock"],
+            textSize: 12,
+            textColor: ["get", "color"],
+            textHaloColor: "#ffffff",
+            textHaloWidth: 2,
+            textAnchor: "bottom",
+            textOffset: [0, -0.9],
+            textMaxWidth: 12,
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+            textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
+          }}
+        />
+      </MapboxGL.ShapeSource>
 
-        {/* #endregion */}
+    {/* Pending venue markers — filtered from venues array */}
+      
+      <MapboxGL.ShapeSource
+        id="pendingMarkers"
+        shape={{
+          type: "FeatureCollection",
+          features: venues
+            .filter(v => v.pending)
+            .map(v => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [v.longitude, v.latitude] },
+              properties: { name: v.name },
+            })),
+        }}
+        onPress={(e) => {
+          const feature = e.features[0];
+          if (!feature) return;
+          const name = feature.properties?.name;
+          const v = venues.find(p => p.name === name && p.pending);
+          if (v) {
+            setSelectedVenue(v);
+            bottomSheetRef.current?.expand();
+          }
+        }}
+      >
+        <MapboxGL.CircleLayer
+          id="pendingVenueCircles"
+          style={{
+            circleRadius: 12,
+            circleColor: PENDING_MARKER_COLOR,
+            circleStrokeWidth: 2,
+            circleStrokeColor: "#ffffff",
+          }}
+        />
+        <MapboxGL.SymbolLayer
+          id="pendingQuestionMarks"
+          aboveLayerID="pendingVenueCircles"
+          style={{
+            textField: "?",
+            textSize: 16,
+            textColor: "#ffffff",
+            textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+          }}
+        />
+        <MapboxGL.SymbolLayer
+          id="pendingNameLabels"
+          aboveLayerID="pendingQuestionMarks"
+          style={{
+            textField: ["get", "name"],
+            textSize: 16,
+            textColor: PENDING_MARKER_COLOR,
+            textHaloColor: "#ffffff",
+            textHaloWidth: 2,
+            textAnchor: "bottom",
+            textOffset: [0, -1.0],
+            textMaxWidth: 10,
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+            symbolSortKey: 10,
+            textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+          }}
+        />
+        <MapboxGL.SymbolLayer
+          id="pendingLabels"
+          aboveLayerID="pendingNameLabels"
+          style={{
+            textField: PENDING_MARKER_LABEL,
+            textSize: 13,
+            textColor: PENDING_MARKER_COLOR,
+            textHaloColor: "#ffffff",
+            textHaloWidth: 2,
+            textAnchor: "top",
+            textOffset: [0, 1.2],
+            textFont: ["DIN Offc Pro Medium", "Arial Unicode MS Regular"],
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+            symbolSortKey: 10,
+          }}
+        />
+      </MapboxGL.ShapeSource>
 
-      </MapboxGL.MapView>
-    
-    {/* #endregion */}
+    {/* #region Venue Markers */}
+
+      <MapboxGL.ShapeSource
+        id="venueMarkers"
+        shape={{
+          type: "FeatureCollection",
+          features: venues
+            .filter(v => !v.pending)
+            .map((venue, i) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [venue.longitude, venue.latitude] },
+              properties: { index: i + 1, color: LEG_COLORS[i % LEG_COLORS.length] },
+            })),
+        }}
+        onPress={(e) => {
+          const feature = e.features[0];
+          if (!feature) return;
+          const idx = (feature.properties?.index ?? 1) - 1;
+          const tappedVenue = venues[idx];
+          if (tappedVenue) {
+            setSelectedVenue(tappedVenue);
+            bottomSheetRef.current?.expand();
+          }
+        }}
+      >
+        <MapboxGL.CircleLayer
+          id="venueCircles"
+          aboveLayerID="legLabelsLayer"
+          style={{
+            circleRadius: 12,
+            circleColor: ["get", "color"],
+            circleStrokeWidth: 2,
+            circleStrokeColor: "#ffffff",
+          }}
+        />
+        <MapboxGL.SymbolLayer
+          id="venueNumbers"
+          aboveLayerID="venueCircles"
+          style={{
+            textField: ["to-string", ["get", "index"]],
+            textSize: 15,
+            textColor: "#ffffff",
+            textFont: ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+          }}
+        />
+      </MapboxGL.ShapeSource>
+
+    </MapboxGL.MapView>
 
     {/* #region Overlays */}
 
@@ -493,70 +613,84 @@ export default function MapScreen() {
       {!loading && venues.length === 0 && location && time && pace && budget && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
-            Tap "Generate itinerary" to find great spots nearby!
+            Tap "Generate New Itinerary" to find great spots nearby!
           </Text>
         </View>
       )}
 
-      <TouchableOpacity
-        style={[styles.generateButton, (!location || loading) && styles.buttonDisabled]}
-        onPress={handleGenerate}
-        disabled={!location || loading}
-      >
-        <Text style={styles.generateButtonText}>
-          {loading ? "Generating..." : "Generate itinerary"}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          style={[styles.generateButton, (!location || loading) && styles.buttonDisabled]}
+          onPress={handleGenerateNew}
+          disabled={!location || loading}
+        >
+          <Text style={styles.generateButtonText}>Generate New Itinerary</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.generateButton,
+            styles.reGenerateButton,
+            (!location || loading || venues.length === 0) && styles.buttonDisabled,
+          ]}
+          onPress={handleReGenerate}
+          disabled={!location || loading || venues.length === 0}
+        >
+          <Text style={styles.generateButtonText}>Re-Generate!</Text>
+          <Text style={styles.reGenerateSubtext}>
+            Considers additions,{"\n"}removals, and locks.
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
 
-    {/* #endregion */}
+    {/* Bottom Sheet */}
+    
+    <BottomSheet
+      ref={bottomSheetRef}
+      index={-1}
+      snapPoints={["35%"]}
+      enablePanDownToClose
+      onClose={() => setSelectedVenue(null)}
+    >
+      <BottomSheetView style={styles.sheetContent}>
 
-    {/* #region Venue Bottom Sheet */}
+        {selectedVenue && (
+          <>
+            <View style={styles.venueNameRow}>
+              <TouchableOpacity onPress={() => toggleVenueLockFromMap(selectedVenue)}>
+                <View style={[styles.venueLockCircle, selectedVenue.locked && styles.venueLockCircleActive]}>
+                  <Ionicons
+                    name={selectedVenue.locked ? "lock-closed" : "lock-open"}
+                    size={16}
+                    color="#fff"
+                  />
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.venueName}>{selectedVenue.name}</Text>
+            </View>
+            <Text style={styles.venueJustification}>{selectedVenue.justification}</Text>
+            <View style={styles.hoursRow}>
+              <Text style={styles.hoursLabel}>Hours  </Text>
+              <Text style={styles.hoursValue}>{selectedVenue.hours}</Text>
+            </View>
+            <View style={styles.venueCardActions}>
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => removeVenueFromMap(selectedVenue)}
+              >
+                <Ionicons name="remove-circle" size={14} color="#7b241c" />
+                <Text style={styles.removeButtonText}>REMOVE</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.moreButton}>
+                <Text style={styles.moreButtonText}>More info</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={-1}
-        snapPoints={["35%"]}
-        enablePanDownToClose
-        onClose={closeVenue}
-      >
-        <BottomSheetView style={styles.sheetContent}>
-
-          {/* Venue name row with lock */}
-          <View style={styles.venueNameRow}>
-            <TouchableOpacity onPress={() => selectedVenue && toggleVenueLockFromMap(selectedVenue)}>
-              <View style={[styles.venueLockCircle, selectedVenue?.locked && styles.venueLockCircleActive]}>
-                <Ionicons name={selectedVenue?.locked ? "lock-closed" : "lock-open"} size={16} color="#fff" />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.venueName}>{selectedVenue?.name}</Text>
-          </View>
-
-          <Text style={styles.venueJustification}>{selectedVenue?.justification}</Text>
-
-          <View style={styles.hoursRow}>
-            <Text style={styles.hoursLabel}>Hours  </Text>
-            <Text style={styles.hoursValue}>{selectedVenue?.hours}</Text>
-          </View>
-
-          {/* Actions row */}
-          <View style={styles.venueCardActions}>
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => selectedVenue && removeVenueFromMap(selectedVenue)}
-            >
-              <Ionicons name="remove-circle" size={14} color="#7b241c" />
-              <Text style={styles.removeButtonText}>REMOVE</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.moreButton}>
-              <Text style={styles.moreButtonText}>More info</Text>
-            </TouchableOpacity>
-          </View>
-
-        </BottomSheetView>
-      </BottomSheet>
-
-    {/* #endregion */}
+      </BottomSheetView>
+    </BottomSheet>
 
     </View>
 
@@ -640,7 +774,15 @@ const styles = StyleSheet.create({
 
   // #endregion
 
-  // #region Banners, Buttons, and Empty States
+  // #region Banners, Buttons, Search Bar, and Empty States
+
+  searchBarWrapper: {
+    position: "absolute",
+    top: 10,
+    left: 12,
+    right: 12,
+    zIndex: 10,
+  },
 
   nudgeBanner: {
     backgroundColor: "#fff8e1",
@@ -669,13 +811,6 @@ const styles = StyleSheet.create({
     color: "#555",
   },
 
-  generateButton: {
-    backgroundColor: "#000",
-    padding: 18,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 10,
-  },
   buttonDisabled: { backgroundColor: "#ccc" },
   generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 
@@ -692,6 +827,51 @@ const styles = StyleSheet.create({
   },
 
   // #endregion
+
+  // #region Generate Buttons
+
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 2,
+  },
+  generateButton: {
+    flex: 1,
+    backgroundColor: "#000",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reGenerateButton: {
+    backgroundColor: "#000",
+  },
+  generateButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  reGenerateSubtext: {
+    color: "#aaa",
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 2,
+  },
+
+  // #endregion
+
+  // #region Pending Venue
+
+  pendingNote: {
+    fontSize: 14,
+    color: "#555",
+    fontStyle: "italic",
+    marginBottom: 16,
+  },
+
+// #endregion
 
   // #region Loading Bar
 

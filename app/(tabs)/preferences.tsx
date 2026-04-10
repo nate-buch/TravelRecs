@@ -1,8 +1,14 @@
+// #region Imports
+
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { loadPreferences, savePreferences } from "../config/preferences";
 import { useAppStore } from "../config/store";
+
+// #endregion
+
+// #region Types and Constants
 
 const TIME_OPTIONS = [
   { id: "a few hours", label: "A few hours", desc: "Must-sees and quick local bites" },
@@ -30,6 +36,10 @@ type OptionProps = {
   onPress: () => void;
 };
 
+// #endregion
+
+// #region Option Card
+
 function OptionCard({ label, desc, selected, onPress }: OptionProps) {
   return (
     <TouchableOpacity
@@ -42,14 +52,31 @@ function OptionCard({ label, desc, selected, onPress }: OptionProps) {
   );
 }
 
+// #endregion
+
+// #region Main Component
+
 export default function PreferencesScreen() {
+
+  // #region Store
+
+  const setPreferences = useAppStore(state => state.setPreferences);
+
+  // #endregion
+
+  // #region Local States
+
   const [time, setTime] = useState("");
   const [pace, setPace] = useState("");
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
-  const setPreferences = useAppStore(state => state.setPreferences);
   const [saved, setSaved] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const canSave = time && pace && budget;
+
+  // #endregion
+
+  // #region Load Saved Preferences
 
   useEffect(() => {
     (async () => {
@@ -63,13 +90,19 @@ export default function PreferencesScreen() {
     })();
   }, []);
 
-  const canSave = time && pace && budget;
+  // #endregion
+
+  // #region Render
 
   return (
+    
     <KeyboardAvoidingView 
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
     >
+
+    // #region Preferences Selectors
+    
     <ScrollView 
       ref={scrollViewRef}
       contentContainerStyle={styles.container}
@@ -119,6 +152,8 @@ export default function PreferencesScreen() {
         />
       </View>
 
+      // #region Save Preferences Button
+
       <TouchableOpacity
         style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
         disabled={!canSave}
@@ -137,12 +172,27 @@ export default function PreferencesScreen() {
         </Text>
       </TouchableOpacity>
 
+      // #endregion
+
     </ScrollView>
+
+    // #endregion
+
     </KeyboardAvoidingView>
   );
+
+  // #endregion
+
 }
 
+// #endregion
+
+// #region Styles
+
 const styles = StyleSheet.create({
+
+  // #region General Layout
+
   container: {
     padding: 24,
     paddingBottom: 48,
@@ -175,11 +225,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 4,
   },
-  optional: {
-    fontWeight: "400",
-    color: "#999",
-    fontSize: 15,
-  },
+
+  // #endregion
+
+  // #region Option Card Styles
+
   card: {
     padding: 4,
     paddingHorizontal: 8,
@@ -209,6 +259,11 @@ const styles = StyleSheet.create({
   cardDescSelected: {
     color: "#ccc",
   },
+
+  // #endregion
+
+  // #region Notes Input
+
   textInput: {
     borderWidth: 1.5,
     borderColor: "#e0e0e0",
@@ -220,6 +275,16 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     marginBottom: 8,
   },
+  optional: {
+    fontWeight: "400",
+    color: "#999",
+    fontSize: 15,
+  },
+
+  // #endregion
+
+  // #region Save Button
+
   saveButton: {
     backgroundColor: "#000",
     padding: 20,
@@ -238,4 +303,9 @@ const styles = StyleSheet.create({
   saveButtonSaved: {
     backgroundColor: "#2d9e5f",
   },
+
+  // #endregion
+
 });
+
+// #endregion

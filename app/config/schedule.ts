@@ -1,6 +1,12 @@
+// #region Imports
+
 import { Venue } from "./claude";
 import { RouteLeg } from "./directions";
 import { formatTime, getVenueDuration, roundToQuarter, VenueType } from "./durations";
+
+// #endregion
+
+// #region Types and Constants
 
 export type TimeBlock = {
   arrivalTime: string;
@@ -8,6 +14,10 @@ export type TimeBlock = {
   durationMinutes: number;
   locked: boolean;
 };
+
+// #endregion
+
+// #region Utilities
 
 const parseTime = (timeStr: string): Date => {
   const [time, ampm] = timeStr.split(" ");
@@ -19,6 +29,10 @@ const parseTime = (timeStr: string): Date => {
   date.setHours(h, minutes, 0, 0);
   return date;
 };
+
+// #endregion
+
+// #region Schedule Calculation API
 
 export const calculateSchedule = (
   venues: Venue[],
@@ -69,6 +83,10 @@ export const calculateSchedule = (
 
   return blocks;
 };
+
+// #endregion
+
+// #region Schedule Recalculation API
 
 export const recalculateSchedule = (
   venues: Venue[],
@@ -126,3 +144,5 @@ export const recalculateSchedule = (
 
   return blocks;
 };
+
+// #endregion

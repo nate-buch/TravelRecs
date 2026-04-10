@@ -1,4 +1,10 @@
+// #region Imports
+
 import { PlacesVenue } from "./places";
+
+// #endregion
+
+// #region Types and Constants
 
 export type Venue = {
   name: string;
@@ -9,41 +15,40 @@ export type Venue = {
   address: string;
   types?: string[];
   venueType?: string;
+  locked?: boolean;
+  pending?: boolean;  // true when added via search, not yet placed in route
 };
 
-export const generateItinerary = async (
-  latitude: number,
-  longitude: number,
-  time: string,
-  pace: string,
-  budget: string,
-  notes: string,
-  nearbyPlaces: PlacesVenue[]
-): Promise<Venue[]> => {
+// #endregion
+
+// #region Generate Itinerary API Call
+
+  export const generateItinerary = async (
+    latitude: number,
+    longitude: number,
+    time: string,
+    pace: string,
+    budget: string,
+    notes: string,
+    nearbyPlaces: PlacesVenue[]
+  ): Promise<Venue[]> => {
+
+  // #region Build Context
+
   const currentTime = new Date().toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
   });
-
   const placesList = nearbyPlaces
     .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — Types: ${p.types.slice(0, 3).join(", ")} — Rating: ${p.rating ?? "N/A"} — Open now: ${p.openNow ?? "unknown"}`)
     .join("\n");
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
-      messages: [
-        {
-          role: "user",
-content: `You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
+  // #endregion
+
+  // #region Build Prompt
+  const prompt = 
+`You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
 
 Their preferences:
 - Time available: ${time}
@@ -88,11 +93,29 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
     "hours": "Opening hours if known, otherwise Verify before visiting",
     "venueType": "one of: coffee_shop, restaurant, museum, bar, park_viewpoint, live_music, attraction_landmark, art_gallery, market, nightclub, brewery"
   }
-]`,
-        },
-      ],
+]`
+  ;
+  // #endregion
+
+  // #region Fetch Response
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
     }),
   });
+
+  // #endregion
+
+  // #region Parse Response
 
   const data = await response.json();
   if (data.type === "error") {
@@ -101,22 +124,30 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   const text = data.content[0].text;
   const clean = text.replace(/```json|```/g, "").trim();
 
-        try {
-        const parsed = JSON.parse(clean) as { name: string; justification: string; hours: string }[];
-        return parsed.map(item => {
-            const match = nearbyPlaces.find(p => p.name === item.name);
-                return {
-                name: item.name,
-                latitude: match?.latitude ?? 0,
-                longitude: match?.longitude ?? 0,
-                address: match?.address ?? "",
-                justification: item.justification,
-                hours: item.hours,
-                types: match?.types ?? [],
-                venueType: item.venueType,
-                };
-        }).filter(v => v.latitude !== 0);
-        } catch {
-        throw new Error("Failed to parse itinerary. Please try again.");
-        }
+  // #endregion
+
+  // #region Match Venues to Places Data
+
+  try {
+    const parsed = JSON.parse(clean) as { name: string; justification: string; hours: string; venueType: string }[];
+    return parsed.map(item => {
+      const match = nearbyPlaces.find(p => p.name === item.name);
+      return {
+        name: item.name,
+        latitude: match?.latitude ?? 0,
+        longitude: match?.longitude ?? 0,
+        address: match?.address ?? "",
+        justification: item.justification,
+        hours: item.hours,
+        types: match?.types ?? [],
+        venueType: item.venueType,
+      };
+    }).filter(v => v.latitude !== 0);
+  } catch {
+    throw new Error("Failed to parse itinerary. Please try again.");
+  }
+
+  // #endregion
+
 };
+// #endregion

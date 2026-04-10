@@ -1,4 +1,10 @@
+// #region Imports
+
 import { Venue } from "./claude";
+
+// #endregion
+
+// #region Math Utilities
 
 const toRad = (deg: number) => deg * Math.PI / 180;
 
@@ -29,6 +35,10 @@ const totalDistance = (
   }
   return dist;
 };
+
+// #endregion
+
+// #region Route Optimization Algorithms
 
 const nearestNeighbor = (
   userLat: number, userLng: number,
@@ -83,6 +93,10 @@ const twoOpt = (
   return best;
 };
 
+// #endregion
+
+// #region Venue Categorization
+
 const NIGHTLIFE_KEYWORDS = ["bar", "lounge", "club", "tavern", "pub", "brewery"];
 const FOOD_KEYWORDS = ["grill", "restaurant", "kitchen", "diner", "cafe", "bistro", "eatery"];
 
@@ -98,6 +112,10 @@ const getVenueCategory = (venue: Venue): "food" | "nightlife" | "activity" => {
   if (FOOD_KEYWORDS.some(k => name.includes(k))) return "food";
   return "activity";
 };
+
+// #endregion
+
+// #region Sanity Check
 
 const sanityCheck = (venues: Venue[]): Venue[] => {
   const result = [...venues];
@@ -121,6 +139,10 @@ const sanityCheck = (venues: Venue[]): Venue[] => {
   return result;
 };
 
+// #endregion
+
+// #region Main Route Optimization API
+
 export const optimizeRoute = (
   userLat: number,
   userLng: number,
@@ -137,3 +159,5 @@ export const optimizeRoute = (
 
   return [first, ...checked];
 };
+
+// #endregion

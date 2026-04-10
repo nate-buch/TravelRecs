@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
+import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
+import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getRouteLegs } from "../config/directions";
 import { formatTime, roundToQuarter } from "../config/durations";
@@ -40,7 +42,12 @@ export default function ItineraryScreen() {
   
   // #region Store
   
-  const { venues, time, pace, budget, routeLegs, setVenues, setRouteLegs, setTimeBlocks, location, timeBlocks, legModes, setLegModes } = useAppStore();
+  const {
+    venues, time, pace, budget, routeLegs,
+    setVenues, setRouteLegs, setTimeBlocks,
+    location, timeBlocks, legModes, setLegModes,
+    pendingVenues, addRemovedVenueName,
+  } = useAppStore();
 
   // #endregion
 
@@ -77,6 +84,7 @@ export default function ItineraryScreen() {
     const newVenues = venues.filter((_, i) => i !== index);
     const newTimeBlocks = timeBlocks.filter((_, i) => i !== index);
     const newLegModes = legModes.filter((_, i) => i !== index);
+    addRemovedVenueName(venues[index].name);
     setVenues(newVenues);
 
     if (location && newVenues.length > 0) {
@@ -94,6 +102,25 @@ export default function ItineraryScreen() {
       setLegModes([]);
       setTimeBlocks([]);
     }
+  };
+
+  const handleSearchSelect = (result: SearchResult) => {
+    const venue: Venue = {
+      name: result.name,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      address: result.address,
+      justification: "",
+      hours: "Verify before visiting",
+      types: result.types,
+      venueType: undefined,
+      locked: true,
+      pending: true,
+    };
+    setVenues([venue, ...venues]);
+    // Insert placeholder entries so array indices stay in sync
+    setTimeBlocks([{ arrivalTime: "", departureTime: "", durationMinutes: 0, locked: false }, ...timeBlocks]);
+    setLegModes(["walking", ...legModes]);
   };
 
   // #endregion
@@ -546,14 +573,32 @@ export default function ItineraryScreen() {
       keyExtractor={(item, index) => `${item.name}-${index}`}
       
       onDragEnd={async ({ data }) => {
-        setVenues(data);
-        if (location) {
+        // First mark any newly placed venue as non-pending
+        const newlyPlaced = data.find((v: Venue, i: number) => {
+          if (!v.pending) return false;
+          const prev = data[i - 1];
+          const next = data[i + 1];
+          return (prev && !prev.pending) || (next && !next.pending);
+        });
+
+        const updated = newlyPlaced
+          ? data.map(v => v.name === newlyPlaced.name ? { ...v, pending: false } : v)
+          : data;
+
+        setVenues(updated);
+
+        // Now derive nonPending from the fully updated array
+        const nonPending = updated.filter(v => !v.pending);
+
+        if (location && nonPending.length > 0) {
           const legs = await getRouteLegs(
             [location.longitude, location.latitude],
-            data
+            nonPending
           );
           setRouteLegs(legs);
-          const blocks = recalculateSchedule(data, legs, timeBlocks, venues, legModes);
+          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, legModes);
+          const newModes = legs.map((leg, i) => legModes[i] ?? getDefaultMode(leg, pace));
+          setLegModes(newModes);
           setTimeBlocks(blocks);
         }
       }}
@@ -563,7 +608,6 @@ export default function ItineraryScreen() {
       ListHeaderComponent={() => (
         <View style={styles.container}>
           <Text style={styles.heading}>YOUR ITINERARY</Text>
-          <View style={styles.headingDivider} />
           <View style={styles.prefsRow}>
             <View style={styles.prefItem}>
               <Text style={styles.prefsLabel}>TRIP LENGTH</Text>
@@ -580,7 +624,12 @@ export default function ItineraryScreen() {
               <Text style={styles.prefTag}>{budget}</Text>
             </View>
           </View>
-          <View style={[styles.headingDivider, { marginBottom: 4 }]} />
+          <View style={styles.sectionDivider} />
+            <VenueSearchBar
+              cameraCenter={null}
+              onSelect={handleSearchSelect}
+              placeholder="Search for a venue to add..."
+            />
         </View>
       )}
 
@@ -590,15 +639,93 @@ export default function ItineraryScreen() {
 
       renderItem={({ item: venue, getIndex, drag, isActive }: RenderItemParams<typeof venues[0]>) => {
         const index = getIndex() ?? 0;
-        const leg = routeLegs[index];  
+        const displayIndex = venues
+          .filter(v => !v.pending)
+          .findIndex(v => v.name === venue.name);
+        const nonPendingIndex = venues
+          .filter(v => !v.pending)
+          .findIndex(v => v.name === venue.name);
+        const leg = routeLegs[nonPendingIndex];
+
+        if (venue.pending) {
+          return (
+            <ScaleDecorator>
+              <TouchableOpacity
+                onLongPress={drag}
+                delayLongPress={200}
+                disabled={isActive}
+                style={[styles.venueCard, isActive && { opacity: 0.8 }]}
+              >
+                <View style={styles.dragHandleContainer}>
+                  <View style={styles.pendingMarker}>
+                    <Text style={styles.pendingMarkerText}>?</Text>
+                  </View>
+                  <Text style={styles.dragHandle}>☰</Text>
+                </View>
+                <View style={styles.venueContent}>
+                  <Text style={styles.pendingVenueName}>{venue.name}</Text>
+                  <Text style={styles.venueAddress}>{venue.address}</Text>
+                  <Text style={styles.pendingHint}>
+                    Long-press and drag into position to add to your route!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => {
+                      addRemovedVenueName(venue.name);
+                      setVenues(venues.filter(v => v.name !== venue.name));
+                    }}
+                  >
+                    <Ionicons name="remove-circle" size={14} color="#7b241c" />
+                    <Text style={styles.removeButtonText}>REMOVE</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </ScaleDecorator>
+          );
+        }  
 
         return (
           <ScaleDecorator>
             <View>
 
+          {/* #region PENDING VENUES */}
+            
+            {index === 0 && pendingVenues.length > 0 && (
+              <>
+                {pendingVenues.map((pending) => (
+                  <View key={pending.name} style={styles.stagingCard}>
+                    <View style={styles.dragHandleContainer}>
+                      <View style={styles.pendingMarker}>
+                        <Text style={styles.pendingMarkerText}>?</Text>
+                      </View>
+                      <Text style={styles.dragHandle}>☰</Text>
+                    </View>
+                    <View style={styles.venueContent}>
+                      <Text style={styles.pendingVenueName}>{pending.name}</Text>
+                      <Text style={styles.venueAddress}>{pending.address}</Text>
+                      <Text style={styles.pendingHint}>
+                        Drag me into position to add to your route!
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => {
+                          addRemovedVenueName(venue.name);
+                          setVenues(venues.filter(v => v.name !== venue.name));
+                        }}
+                      >
+                        <Ionicons name="remove-circle" size={14} color="#7b241c" />
+                        <Text style={styles.removeButtonText}>REMOVE</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+                <View style={styles.pendingSectionDivider} />
+              </>
+            )}
+
           {/* #region ROUTE LEGS */}
 
-            {routeLegs[index] && (
+            {leg && (
               <View style={styles.legBar}>
                 <View style={styles.legDivider} />
                 <View style={styles.legModeRow}>
@@ -613,11 +740,11 @@ export default function ItineraryScreen() {
                       styles.legBarText,
                       legModes[index] === "walking" && styles.legBarTextSelected,
                     ]}>
-                      {`Walk: ${routeLegs[index].walkingDuration} min`}
+                      {`Walk: ${leg.walkingDuration} min`}
                     </Text>
                   </TouchableOpacity>
 
-                  {routeLegs[index].drivingDuration && (
+                  {leg.drivingDuration && (
                     <TouchableOpacity
                       onPress={() => toggleLegMode(index)}
                       style={[
@@ -629,7 +756,7 @@ export default function ItineraryScreen() {
                         styles.legBarText,
                         legModes[index] === "driving" && styles.legBarTextSelected,
                       ]}>
-                        {`Drive: ${routeLegs[index].drivingDuration} min`}
+                        {`Drive: ${leg.drivingDuration} min`}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -649,8 +776,8 @@ export default function ItineraryScreen() {
                 style={[styles.venueCard, isActive && { opacity: 0.8, backgroundColor: "#f9f9f9" }]}
               >
                 <View style={styles.dragHandleContainer}>
-                  <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[index % LEG_COLORS.length] }]}>
-                    <Text style={styles.venueNumberText}>{index + 1}</Text>
+                  <View style={[styles.venueNumber, { backgroundColor: LEG_COLORS[displayIndex % LEG_COLORS.length] }]}>
+                    <Text style={styles.venueNumberText}>{displayIndex + 1}</Text>
                   </View>
                   <Text style={styles.dragHandle}>☰</Text>
                 </View>
@@ -779,7 +906,7 @@ const styles = StyleSheet.create({
   // #region General Layout
 
   container: {
-    padding: 24,
+    padding: 12,
   },
   emptyContainer: {
     flex: 1,
@@ -820,18 +947,19 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     letterSpacing: 2,
-    marginBottom: 12,
+    marginBottom: 6,
   },
-  headingDivider: {
-    height: 1,
+  sectionDivider: {
+    height: 3,
     backgroundColor: "#ddd",
     marginBottom: 12,
+    marginTop: 8,
   },
   prefsRow: {
     flexDirection: "row",
     justifyContent: "space-evenly",
     alignItems: "flex-start",
-    marginBottom: 12,
+    marginBottom: 4,
   },
   prefItem: {
     flex: 1,
@@ -843,7 +971,7 @@ const styles = StyleSheet.create({
     color: "#888",
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   prefTag: {
     fontSize: 13,
@@ -855,6 +983,54 @@ const styles = StyleSheet.create({
     color: "#ccc",
     fontSize: 16,
     marginTop: 8,
+  },
+
+  // #endregion
+
+  // #region Staging Card
+
+  stagingCard: {
+    flexDirection: "row",
+    marginBottom: 20,
+    paddingLeft: 8,
+    paddingRight: 8,
+    gap: 4,
+    opacity: 0.85,
+  },
+  pendingMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#888888",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  pendingMarkerText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  pendingVenueName: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#888888",
+    flex: 1,
+    marginBottom: 2,
+  },
+  pendingHint: {
+    fontSize: 13,
+    color: "#888",
+    fontStyle: "italic",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  pendingSectionDivider: {
+    height: 2,
+    backgroundColor: "#ddd",
+    marginBottom: 16,
+    marginHorizontal: 8,
   },
 
   // #endregion
