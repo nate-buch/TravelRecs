@@ -10,7 +10,7 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
-import { getRouteLegs } from "../config/directions";
+import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
@@ -28,13 +28,6 @@ const LOADING_MESSAGES = [
   "Optimizing travel flow...",
   "Finalizing itinerary...",
 ];
-
-const getDefaultMode = (leg: RouteLeg, pace: string): "walking" | "driving" => {
-  if (!leg.drivingDuration) return "walking";
-  if (pace.toLowerCase().includes("hustle")) return "driving";
-  if (pace.toLowerCase().includes("easy")) return "walking";
-  return leg.walkingDuration <= 15 ? "walking" : "driving";
-};
 
 const PENDING_MARKER_COLOR = "#888888";
 const PENDING_MARKER_LABEL = "Add to your Itinerary!";
@@ -226,8 +219,6 @@ export default function MapScreen() {
       pending: true,
     };
     setVenues([venue, ...venues]);
-    setTimeBlocks([{ arrivalTime: "", departureTime: "", durationMinutes: 0, locked: false }, ...timeBlocks]);
-    setLegModes(["walking", ...legModes]);
     cameraRef.current?.flyTo([result.longitude, result.latitude], 500);
   };
 
@@ -271,15 +262,6 @@ export default function MapScreen() {
   };
 
   // #endregion
-
-  // #region Bottom Sheet — Pending Venue
-
-  const removePendingFromMap = (name: string) => {
-    bottomSheetRef.current?.close();
-    removePendingVenue(name);
-  };
-
-  // #endregion  
 
   // #region Render Itinerary
 

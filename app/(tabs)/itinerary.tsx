@@ -7,7 +7,7 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-nativ
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
-import { getRouteLegs } from "../config/directions";
+import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatTime, roundToQuarter } from "../config/durations";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
@@ -53,49 +53,65 @@ export default function ItineraryScreen() {
 
   // #region Venue Actions
 
-  const toggleLock = (index: number) => {
+  const toggleLock = (nonPendingIndex: number) => {
     const updated = [...timeBlocks];
-    updated[index] = { ...updated[index], locked: !updated[index].locked };
+    const isCurrentlyLocked = updated[nonPendingIndex].locked;
+    updated[nonPendingIndex] = { ...updated[nonPendingIndex], locked: !isCurrentlyLocked };
     setTimeBlocks(updated);
 
     // If locking schedule, also lock the venue
-    if (!timeBlocks[index].locked) {
-      const newVenues = [...venues];
-      newVenues[index] = { ...newVenues[index], locked: true };
+    if (!isCurrentlyLocked) {
+      const nonPendingVenues = venues.filter(v => !v.pending);
+      const venueName = nonPendingVenues[nonPendingIndex].name;
+      const newVenues = venues.map(v => v.name === venueName ? { ...v, locked: true } : v);
       setVenues(newVenues);
     }
   };
 
-  const toggleVenueLock = (index: number) => {
-    const newVenues = [...venues];
-    const isCurrentlyLocked = newVenues[index].locked;
-    newVenues[index] = { ...newVenues[index], locked: !isCurrentlyLocked };
+  const toggleVenueLock = (nonPendingIndex: number, venueName: string) => {
+    const isCurrentlyLocked = venues.find(v => v.name === venueName)?.locked ?? false;
     
+    // Toggle the venue lock by name to avoid raw index issues
+    const newVenues = venues.map(v => 
+      v.name === venueName ? { ...v, locked: !isCurrentlyLocked } : v
+    );
+
     // If unlocking venue, also unlock the schedule
-    if (isCurrentlyLocked && timeBlocks[index].locked) {
+    if (isCurrentlyLocked && timeBlocks[nonPendingIndex]?.locked) {
       const newBlocks = [...timeBlocks];
-      newBlocks[index] = { ...newBlocks[index], locked: false };
+      newBlocks[nonPendingIndex] = { ...newBlocks[nonPendingIndex], locked: false };
       setTimeBlocks(newBlocks);
     }
     setVenues(newVenues);
-  };  
+  };
 
-  const removeVenue = async (index: number) => {
-    const newVenues = venues.filter((_, i) => i !== index);
-    const newTimeBlocks = timeBlocks.filter((_, i) => i !== index);
-    const newLegModes = legModes.filter((_, i) => i !== index);
-    addRemovedVenueName(venues[index].name);
+  const removeVenue = async (venueName: string) => {
+    addRemovedVenueName(venueName);
+    
+    const newVenues = venues.filter(v => v.name !== venueName);
+    const nonPending = newVenues.filter(v => !v.pending);
+    const removedNonPendingIndex = venues
+      .filter(v => !v.pending)
+      .findIndex(v => v.name === venueName);
+    
+    const newTimeBlocks = removedNonPendingIndex >= 0
+      ? timeBlocks.filter((_, i) => i !== removedNonPendingIndex)
+      : timeBlocks;
+    const newLegModes = removedNonPendingIndex >= 0
+      ? legModes.filter((_, i) => i !== removedNonPendingIndex)
+      : legModes;
+
     setVenues(newVenues);
 
-    if (location && newVenues.length > 0) {
+    if (location && nonPending.length > 0) {
       const legs = await getRouteLegs(
         [location.longitude, location.latitude],
-        newVenues
+        nonPending
       );
       setRouteLegs(legs);
-      const modes = legs.map((leg, i) => newLegModes[i] ?? "walking");
+      const modes = legs.map((leg, i) => newLegModes[i] ?? getDefaultMode(leg, pace));
       setLegModes(modes);
-      const blocks = recalculateSchedule(newVenues, legs, newTimeBlocks, newVenues);
+      const blocks = recalculateSchedule(nonPending, legs, newTimeBlocks, nonPending, newLegModes);
       setTimeBlocks(blocks);
     } else {
       setRouteLegs([]);
@@ -118,9 +134,6 @@ export default function ItineraryScreen() {
       pending: true,
     };
     setVenues([venue, ...venues]);
-    // Insert placeholder entries so array indices stay in sync
-    setTimeBlocks([{ arrivalTime: "", departureTime: "", durationMinutes: 0, locked: false }, ...timeBlocks]);
-    setLegModes(["walking", ...legModes]);
   };
 
   // #endregion
@@ -326,6 +339,7 @@ export default function ItineraryScreen() {
         // Moving arrival later — simple forward cascade
         for (let i = index; i < blocks.length; i++) {
           if (i > index && timeBlocks[i].locked) continue;
+          if (venues[i]?.pending) continue;
           const arr = parseTime(blocks[i].arrivalTime);
           const dep = parseTime(blocks[i].departureTime);
           arr.setMinutes(arr.getMinutes() + deltaMins);
@@ -572,22 +586,18 @@ export default function ItineraryScreen() {
       data={venues}
       keyExtractor={(item, index) => `${item.name}-${index}`}
       
-      onDragEnd={async ({ data }) => {
-        // First mark any newly placed venue as non-pending
-        const newlyPlaced = data.find((v: Venue, i: number) => {
-          if (!v.pending) return false;
-          const prev = data[i - 1];
-          const next = data[i + 1];
-          return (prev && !prev.pending) || (next && !next.pending);
-        });
+      onDragEnd={async ({ data, from, to }) => {
+        // The dragged venue is at the `to` index in the new array
+        const draggedVenue = data[to];
 
-        const updated = newlyPlaced
-          ? data.map(v => v.name === newlyPlaced.name ? { ...v, pending: false } : v)
+        // Only mark as placed if it was a pending venue deliberately moved
+        const updated = draggedVenue?.pending
+          ? data.map(v => v.name === draggedVenue.name ? { ...v, pending: false } : v)
           : data;
 
         setVenues(updated);
 
-        // Now derive nonPending from the fully updated array
+        // Derive nonPending from the fully updated array
         const nonPending = updated.filter(v => !v.pending);
 
         if (location && nonPending.length > 0) {
@@ -596,11 +606,13 @@ export default function ItineraryScreen() {
             nonPending
           );
           setRouteLegs(legs);
-          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, legModes);
-          const newModes = legs.map((leg, i) => legModes[i] ?? getDefaultMode(leg, pace));
+          const newModes = legs.map((leg) => getDefaultMode(leg, pace));
           setLegModes(newModes);
+          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, legModes);
           setTimeBlocks(blocks);
         }
+
+      console.log("onDragEnd data:", JSON.stringify(data.map(v => ({ name: v.name, pending: v.pending }))))
       }}
       
       // #region Itinerary Preference Header
@@ -785,7 +797,7 @@ export default function ItineraryScreen() {
                 <View style={styles.venueContent}>
 
                   <View style={styles.venueNameRow}>
-                    <TouchableOpacity onPress={() => toggleVenueLock(index)}>
+                    <TouchableOpacity onPress={() => toggleVenueLock(nonPendingIndex, venue.name)}>
                       <View style={[styles.venueLockCircle, venue.locked && styles.venueLockCircleActive]}>
                         <Ionicons name={venue.locked ? "lock-closed" : "lock-open"} size={16} color="#fff" />
                       </View>
@@ -799,7 +811,7 @@ export default function ItineraryScreen() {
                   
                   <TouchableOpacity
                     style={styles.removeButton}
-                    onPress={() => removeVenue(index)}
+                    onPress={() => removeVenue(venue.name)}
                   >
                     <Ionicons name="remove-circle" size={14} color="#7b241c" />
                     <Text style={styles.removeButtonText}>REMOVE</Text>
