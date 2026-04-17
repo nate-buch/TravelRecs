@@ -2,9 +2,10 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
@@ -564,7 +565,14 @@ export default function ItineraryScreen() {
 
   if (venues.length === 0) {
     return (
+
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <StatusBar style="dark" />
+
       <View style={styles.emptyContainer}>
+
+        <Text style={styles.heading}>YOUR ITINERARY</Text>
+
         <VenueSearchBar
           cameraCenter={null}
           onSelect={handleSearchSelect}
@@ -583,6 +591,8 @@ export default function ItineraryScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      </SafeAreaView>
     );
   }
 
@@ -591,55 +601,42 @@ export default function ItineraryScreen() {
   // #region Rendering
 
   return (
-    <View style={{ flex: 1 }}>
 
-      {/* #region Itinerary Preference Header */}
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <StatusBar style="dark" />
 
-      <View style={styles.container}>
-        <Text style={styles.heading}>YOUR ITINERARY</Text>
-        <View style={styles.prefsRow}>
-          <View style={styles.prefItem}>
-            <Text style={styles.prefsLabel}>TRIP LENGTH</Text>
-            <Text style={styles.prefTag}>{time}</Text>
-          </View>
-          <Text style={styles.prefDivider}>|</Text>
-          <View style={styles.prefItem}>
-            <Text style={styles.prefsLabel}>SPEED</Text>
-            <Text style={styles.prefTag}>{pace}</Text>
-          </View>
-          <Text style={styles.prefDivider}>|</Text>
-          <View style={styles.prefItem}>
-            <Text style={styles.prefsLabel}>BUDGET</Text>
-            <Text style={styles.prefTag}>{budget}</Text>
-          </View>
-        </View>
-        <View style={styles.sectionDivider} />
-        <VenueSearchBar
-          cameraCenter={null}
-          onSelect={handleSearchSelect}
-          placeholder="Search for a venue to add..."
-        />
-      </View>
-
-      {/* #endregion */}
+    {/* #region Scrollable List */}
 
     <DraggableFlatList
       data={venues}
       keyExtractor={(item, index) => `${item.name}-${index}`}
+      autoscrollThreshold={150}
+      autoscrollSpeed={200}
+
       onDragEnd={async ({ data, from, to }) => {
+        
         const draggedVenue = data[to];
 
         // Ignore spurious fires (e.g. from button taps) unless a pending venue is being placed
         if (from === to && !venues[from]?.pending) return;
 
         // Flip pending → placed if a pending venue was deliberately dragged into position
-        const updated = draggedVenue?.pending
+        let updated = draggedVenue?.pending
           ? data.map(v => v.name === draggedVenue.name ? { ...v, pending: false } : v)
           : data;
+        
+        // Enforce pending venues always appear before placed venues
+        if (updated.some(v => v.pending)) {
+          updated = [
+            ...updated.filter(v => v.pending),
+            ...updated.filter(v => !v.pending),
+          ];
+        }
 
         const nonPending = updated.filter(v => !v.pending);
 
         if (location && nonPending.length > 0) {
+
           const legs = await getRouteLegs(
             [location.longitude, location.latitude],
             nonPending
@@ -654,12 +651,24 @@ export default function ItineraryScreen() {
         }
       }}
 
-      // #region Render Each Venue
+      ListHeaderComponent={() => (
+        <View style={{ paddingTop: 100 }}>
+          {venues.some(v => v.pending) && (
+            <>
+              <Text style={styles.awaitingLabel}>AWAITING POSITIONING</Text>
+              <View style={styles.awaitingDivider} />
+            </>
+          )}
+        </View>
+      )}
 
       renderItem={({ item: venue, getIndex, drag, isActive }: RenderItemParams<typeof venues[0]>) => {
         const index = getIndex() ?? 0;
         
         if (venue.pending) {
+
+          const isLastPending = venue.pending && !venues[index + 1]?.pending;
+
           return (
             <ScaleDecorator>
               <TouchableOpacity
@@ -691,7 +700,16 @@ export default function ItineraryScreen() {
                     <Text style={styles.removeButtonText}>REMOVE</Text>
                   </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </TouchableOpacity> 
+
+              {isLastPending && !isActive && (
+                <View style={styles.pendingPlacedDivider} />
+              )}
+
+              {isLastPending && !isActive && venues.filter(v => !v.pending).length === 0 && (
+                <Text style={styles.positionHereLabel}>Position your stops here!</Text>
+              )}
+                    
             </ScaleDecorator>
           );
         }          
@@ -748,9 +766,7 @@ export default function ItineraryScreen() {
                 </View>
                 <View style={styles.legDivider} />
               </View>
-            )}
-
-          {/* #endregion */}            
+            )}          
 
             {/* #region VENUE CARD */}
 
@@ -791,8 +807,6 @@ export default function ItineraryScreen() {
                   </TouchableOpacity>                  
                 </View>
 
-            {/* #endregion */}
-
               {/* #region TIME BLOCKS */}
 
                 {timeBlocks[nonPendingIndex] && (
@@ -814,9 +828,9 @@ export default function ItineraryScreen() {
                         />
                       </View>
                     </TouchableOpacity>
-                  {/* #endregion */}
 
                   {/* #region Arrival Time */}
+
                     <View style={styles.timeBlockTimeContainer}>
                       <TouchableOpacity onPress={() => applyTimeChange(nonPendingIndex, "arrival", parseTime(timeBlocks[nonPendingIndex].arrivalTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
@@ -833,9 +847,9 @@ export default function ItineraryScreen() {
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
-                  {/* #endregion */}
 
                   {/* #region Departure Time */}
+
                     <View style={[styles.timeBlockTimeContainer, { marginBottom: 3 }]}>
                       <TouchableOpacity onPress={() => applyTimeChange(nonPendingIndex, "departure", parseTime(timeBlocks[nonPendingIndex].departureTime), -1)}>
                         <Text style={styles.timeChevron}>◀</Text>
@@ -852,33 +866,48 @@ export default function ItineraryScreen() {
                         <Text style={styles.timeChevron}>▶</Text>
                       </TouchableOpacity>
                     </View>
-                  {/* #endregion */}
 
                   {/* #region Duration */}
+
                     <Text style={[styles.timeBlockDuration, timeBlocks[nonPendingIndex].locked && { color: "#2d9e5f", fontWeight: "900" }]}>
                       {`~${formatDuration(timeBlocks[nonPendingIndex].durationMinutes)}`}
                     </Text>
-                  {/* #endregion */}
 
                   </View>
                 )}
 
-              {/* #endregion */}
-
               </TouchableOpacity>
-
             </View>
           </ScaleDecorator>
         );
       }}
 
-      // #endregion
-
-      autoscrollThreshold={150}
-      autoscrollSpeed={200}
-      contentContainerStyle={{ paddingBottom: 60 + insets.bottom + 60 }}
+      contentContainerStyle={{ paddingBottom: 60 + insets.bottom + 60}}
     />
-  </View>
+
+    {/* Overlaid search bar */}
+
+    <View style={{
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: "#fff",
+      paddingHorizontal: 12,
+      paddingTop: insets.top + 12,
+      paddingBottom: 8,
+      zIndex: 10,
+    }}>
+      <Text style={styles.heading}>YOUR ITINERARY</Text>
+        <VenueSearchBar
+          cameraCenter={null}
+          onSelect={handleSearchSelect}
+          placeholder="Search for a venue to add..."
+        />
+    </View>
+
+  </SafeAreaView>
+
   );
 
   // #endregion
@@ -893,12 +922,10 @@ const styles = StyleSheet.create({
 
   // #region General Layout
 
-  container: {
-    padding: 12,
-  },
   emptyContainer: {
     flex: 1,
-    padding: 32,
+    padding: 12,
+    paddingTop: 12,
   },
   emptyTitle: {
     fontSize: 22,
@@ -929,52 +956,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-
-  // #endregion
-
-  // #region Preferences Header
-
+  awaitingLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#888",
+    letterSpacing: 1.5,
+    textAlign: "center",
+    paddingTop: 12,
+    paddingBottom: 3,
+    textTransform: "uppercase",
+  },
+  awaitingDivider: {
+    height: 2,
+    backgroundColor: "#ccc",
+    width: "60%",
+    alignSelf: "center",
+    marginBottom: 8,
+  },
+  pendingPlacedDivider: {
+    height: 3,
+    backgroundColor: "#777",
+    marginTop: 0,
+    marginBottom: 4,
+    marginHorizontal: 8,
+  },
+  positionHereLabel: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#888",
+    textAlign: "center",
+    paddingVertical: 30,
+    fontStyle: "italic",
+  },
   heading: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     letterSpacing: 2,
     marginBottom: 6,
-  },
-  sectionDivider: {
-    height: 3,
-    backgroundColor: "#ddd",
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  prefsRow: {
-    flexDirection: "row",
-    justifyContent: "space-evenly",
-    alignItems: "flex-start",
-    marginBottom: 4,
-  },
-  prefItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  prefsLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#888",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  prefTag: {
-    fontSize: 13,
-    color: "#333",
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  prefDivider: {
-    color: "#ccc",
-    fontSize: 16,
-    marginTop: 8,
   },
 
   // #endregion
@@ -1041,9 +1060,11 @@ const styles = StyleSheet.create({
 
   venueCard: {
     flexDirection: "row",
-    marginBottom: 20,
-    paddingLeft: 8,
-    paddingRight: 8,
+    marginBottom: 12,
+    marginTop: 6,
+    paddingTop: 8,
+    paddingLeft: 10,
+    paddingRight: 10,
     gap: 4,
   },
   venueNumber: {
@@ -1203,12 +1224,12 @@ const styles = StyleSheet.create({
 
   legBar: {
     marginLeft: 0,
-    marginBottom: 12,
+    marginBottom: 0,
     marginTop: 4,
     alignItems: "center",
   },
   legBarText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     fontStyle: "italic",
     color: "#888",
@@ -1227,11 +1248,11 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   legModeOption: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "transparent",

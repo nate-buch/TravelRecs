@@ -1,8 +1,10 @@
 // #region Imports
 
 import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { loadPreferences, savePreferences } from "../config/preferences";
 import { useAppStore } from "../config/store";
 
@@ -95,90 +97,92 @@ export default function PreferencesScreen() {
   // #region Render
 
   return (
-    
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-    >
-
-    // #region Preferences Selectors
-    
-    <ScrollView 
-      ref={scrollViewRef}
-      contentContainerStyle={styles.container}
-    >
-
-      <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
-      <View style={styles.headingDivider} />
-
-      <Text style={styles.sectionTitle}>How long is your visit?</Text>
-      <View style={styles.optionsGroup}>
-        {TIME_OPTIONS.map(o => (
-          <OptionCard key={o.id} label={o.label} desc={o.desc} selected={time === o.id} onPress={() => setTime(o.id)} />
-        ))}
-      </View>
-      <View style={styles.sectionDivider} />
-
-      <Text style={styles.sectionTitle}>How fast do you want to move?</Text>
-      <View style={styles.optionsGroup}>
-        {PACE_OPTIONS.map(o => (
-          <OptionCard key={o.id} label={o.label} desc={o.desc} selected={pace === o.id} onPress={() => setPace(o.id)} />
-        ))}
-      </View>
-      <View style={styles.sectionDivider} />
-
-      <Text style={styles.sectionTitle}>How flexible is your budget?</Text>
-      <View style={styles.optionsGroup}>
-        {BUDGET_OPTIONS.map(o => (
-          <OptionCard key={o.id} label={o.label} desc={o.desc} selected={budget === o.id} onPress={() => setBudget(o.id)} />
-        ))}
-      </View>
-      <View style={styles.sectionDivider} />
-
-      <Text style={styles.sectionTitle}>Anything else to know? <Text style={styles.optional}>(optional)</Text></Text>
-      <View style={styles.optionsGroup}>
-        <TextInput
-          style={styles.textInput}
-          placeholder="e.g. vegetarian, no museums, need good coffee..."
-          placeholderTextColor="#aaa"
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          onFocus={() => {           // ← add this
-            setTimeout(() => {
-              scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 300);
-          }}
-        />
-      </View>
-
-      // #region Save Preferences Button
-
-      <TouchableOpacity
-        style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
-        disabled={!canSave}
-        onPress={async () => {
-          await savePreferences(time, pace, budget, notes);
-          setPreferences(time, pace, budget, notes);
-          setSaved(true);
-          setTimeout(() => {
-            setSaved(false);
-            router.push("/(tabs)/map");
-          }, 1200);
-        }}
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <StatusBar style="dark" />
+      
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <Text style={styles.saveButtonText}>
-          {saved ? "Preferences saved!  ✓" : "Save preferences"}
-        </Text>
-      </TouchableOpacity>
+
+      // #region Preferences Selectors
+      
+      <ScrollView 
+        ref={scrollViewRef}
+        contentContainerStyle={styles.container}
+      >
+
+        <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
+        <View style={styles.headingDivider} />
+
+        <Text style={styles.sectionTitle}>How long is your visit?</Text>
+        <View style={styles.optionsGroup}>
+          {TIME_OPTIONS.map(o => (
+            <OptionCard key={o.id} label={o.label} desc={o.desc} selected={time === o.id} onPress={() => setTime(o.id)} />
+          ))}
+        </View>
+        <View style={styles.sectionDivider} />
+
+        <Text style={styles.sectionTitle}>How fast do you want to move?</Text>
+        <View style={styles.optionsGroup}>
+          {PACE_OPTIONS.map(o => (
+            <OptionCard key={o.id} label={o.label} desc={o.desc} selected={pace === o.id} onPress={() => setPace(o.id)} />
+          ))}
+        </View>
+        <View style={styles.sectionDivider} />
+
+        <Text style={styles.sectionTitle}>How flexible is your budget?</Text>
+        <View style={styles.optionsGroup}>
+          {BUDGET_OPTIONS.map(o => (
+            <OptionCard key={o.id} label={o.label} desc={o.desc} selected={budget === o.id} onPress={() => setBudget(o.id)} />
+          ))}
+        </View>
+        <View style={styles.sectionDivider} />
+
+        <Text style={styles.sectionTitle}>Anything else to know? <Text style={styles.optional}>(optional)</Text></Text>
+        <View style={styles.optionsGroup}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="e.g. vegetarian, no museums, need good coffee..."
+            placeholderTextColor="#aaa"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            onFocus={() => {           // ← add this
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 300);
+            }}
+          />
+        </View>
+
+        // #region Save Preferences Button
+
+        <TouchableOpacity
+          style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
+          disabled={!canSave}
+          onPress={async () => {
+            await savePreferences(time, pace, budget, notes);
+            setPreferences(time, pace, budget, notes);
+            setSaved(true);
+            setTimeout(() => {
+              setSaved(false);
+              router.push("/(tabs)/map");
+            }, 1200);
+          }}
+        >
+          <Text style={styles.saveButtonText}>
+            {saved ? "Preferences saved!  ✓" : "Save preferences"}
+          </Text>
+        </TouchableOpacity>
+
+        // #endregion
+
+      </ScrollView>
 
       // #endregion
-
-    </ScrollView>
-
-    // #endregion
-
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 
   // #endregion
@@ -194,15 +198,15 @@ const styles = StyleSheet.create({
   // #region General Layout
 
   container: {
-    padding: 24,
+    padding: 12,
     paddingBottom: 48,
   },
   heading: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     letterSpacing: 2,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headingDivider: {
     height: 1,

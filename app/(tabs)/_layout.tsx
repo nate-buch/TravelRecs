@@ -8,7 +8,7 @@ export default function TabLayout() {
 
   return (
     <Tabs screenOptions={{
-      headerStyle: { height: 80 },
+      headerShown: false,
       headerTitleAlign: "center",
       tabBarStyle: {
         height: 60 + insets.bottom,
