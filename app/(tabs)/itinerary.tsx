@@ -882,7 +882,7 @@ export default function ItineraryScreen() {
         );
       }}
 
-      contentContainerStyle={{ paddingBottom: 60 + insets.bottom + 60}}
+      contentContainerStyle={{ paddingBottom: 10 }}
     />
 
     {/* Overlaid search bar */}

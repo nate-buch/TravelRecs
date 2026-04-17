@@ -104,8 +104,6 @@ export default function PreferencesScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-
-      // #region Preferences Selectors
       
       <ScrollView 
         ref={scrollViewRef}
@@ -156,8 +154,6 @@ export default function PreferencesScreen() {
           />
         </View>
 
-        // #region Save Preferences Button
-
         <TouchableOpacity
           style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
           disabled={!canSave}
@@ -176,11 +172,8 @@ export default function PreferencesScreen() {
           </Text>
         </TouchableOpacity>
 
-        // #endregion
-
       </ScrollView>
 
-      // #endregion
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

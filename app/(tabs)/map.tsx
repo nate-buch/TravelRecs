@@ -5,8 +5,10 @@ import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import MapboxGL from "@rnmapbox/maps";
 import * as Location from "expo-location";
 import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
@@ -16,8 +18,6 @@ import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
