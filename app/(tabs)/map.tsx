@@ -16,6 +16,8 @@ import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
@@ -95,6 +97,8 @@ export default function MapScreen() {
     setTimeBlocks, legModes, setLegModes, timeBlocks,
     addRemovedVenueName, clearRemovedVenueNames,
   } = useAppStore();
+
+  const insets = useSafeAreaInsets()
   
   // #endregion
 
@@ -267,11 +271,21 @@ export default function MapScreen() {
   // #region Render Itinerary
 
   return (
+
+    <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <StatusBar style="dark" />
+    
     <View style={styles.container}>
 
     {/* #region Search Bar */}
 
-    <View style={styles.searchBarWrapper}>
+    <View style={{
+      position: "absolute",
+      top: insets.top + 10,
+      left: 12,
+      right: 12,
+      zIndex: 10,
+    }}>
       <VenueSearchBar
         cameraCenter={cameraCenter}
         onSelect={handleSearchSelect}
@@ -385,8 +399,6 @@ export default function MapScreen() {
           </MapboxGL.ShapeSource>
         )}
       </>
-
-      {/* #endregion */}
 
     {/* #region Venue Names and Times */}
 
@@ -690,7 +702,7 @@ export default function MapScreen() {
     </BottomSheet>
 
     </View>
-
+    </SafeAreaView>
   );
 
   //#endregion
@@ -771,15 +783,7 @@ const styles = StyleSheet.create({
 
   // #endregion
 
-  // #region Banners, Buttons, Search Bar, and Empty States
-
-  searchBarWrapper: {
-    position: "absolute",
-    top: 10,
-    left: 12,
-    right: 12,
-    zIndex: 10,
-  },
+  // #region Banners, Buttons, and Empty States
 
   nudgeBanner: {
     backgroundColor: "#fff8e1",
