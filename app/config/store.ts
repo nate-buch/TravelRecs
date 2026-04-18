@@ -16,6 +16,13 @@ type AppStore = {
   budget: string;     // Budget level (e.g. "mid-range", "inexpensive", "YOLO vacay")
   notes: string;      // Freeform instructions passed verbatim to Claude
 
+  // ─── Venue Preferences ───────────────────────────────────────────────────
+  // Three-state toggles set on the Preferences tab. Keyed by venueType,
+  // values are "love", "hate", or "neutral". Passed to Claude on generation.
+
+  venuePreferences: Record<string, "love" | "hate" | "neutral">;
+  setVenuePreferences: (prefs: Record<string, "love" | "hate" | "neutral">) => void;
+
   // ─── Device Location ─────────────────────────────────────────────────────
   // The user's GPS coordinates, obtained on app load. Used as the starting
   // point for route optimization and itinerary generation.
@@ -70,6 +77,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   pace: "",
   budget: "",
   notes: "",
+
+  // ─── Venue Preferences ───────────────────────────────────────────────────
+  venuePreferences: {},
+  setVenuePreferences: (prefs) => set({ venuePreferences: prefs }),
 
   // ─── Device Location ─────────────────────────────────────────────────────
   location: null,

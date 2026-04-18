@@ -7,19 +7,13 @@ export const savePreferences = async (
   time: string,
   pace: string,
   budget: string,
-  notes: string
+  notes: string,
+  venuePreferences: Record<string, "love" | "hate" | "neutral">
 ) => {
-  try {
-    await setDoc(doc(db, "preferences", DEVICE_ID), {
-      time,
-      pace,
-      budget,
-      notes,
-      updatedAt: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.error("Error saving preferences:", e);
-  }
+  await setDoc(doc(db, "preferences", DEVICE_ID), {
+    time, pace, budget, notes, venuePreferences,
+    updatedAt: new Date().toISOString(),
+  });
 };
 
 export const loadPreferences = async () => {
@@ -30,7 +24,6 @@ export const loadPreferences = async () => {
     }
     return null;
   } catch (e) {
-    console.error("Error loading preferences:", e);
     return null;
   }
 };

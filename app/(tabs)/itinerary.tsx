@@ -922,6 +922,18 @@ const styles = StyleSheet.create({
 
   // #region General Layout
 
+  heading: {
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+
+  // #endregion
+
+  // #region Empty State
+  
   emptyContainer: {
     flex: 1,
     padding: 12,
@@ -956,6 +968,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+
+  // #endregion
+
+  // #region Pending Venues
+
   awaitingLabel: {
     fontSize: 13,
     fontWeight: "800",
@@ -980,6 +997,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginHorizontal: 8,
   },
+  pendingSectionDivider: {
+    height: 2,
+    backgroundColor: "#ddd",
+    marginBottom: 16,
+    marginHorizontal: 8,
+  },
+  
   positionHereLabel: {
     fontSize: 20,
     fontWeight: "600",
@@ -988,17 +1012,6 @@ const styles = StyleSheet.create({
     paddingVertical: 30,
     fontStyle: "italic",
   },
-  heading: {
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "center",
-    letterSpacing: 2,
-    marginBottom: 6,
-  },
-
-  // #endregion
-
-  // #region Staging Card
 
   stagingCard: {
     flexDirection: "row",
@@ -1036,12 +1049,6 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 4,
     marginBottom: 4,
-  },
-  pendingSectionDivider: {
-    height: 2,
-    backgroundColor: "#ddd",
-    marginBottom: 16,
-    marginHorizontal: 8,
   },
 
   // #endregion

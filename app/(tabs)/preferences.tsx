@@ -1,5 +1,6 @@
 // #region Imports
 
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
@@ -13,44 +14,72 @@ import { useAppStore } from "../config/store";
 // #region Types and Constants
 
 const TIME_OPTIONS = [
-  { id: "a few hours", label: "A few hours", desc: "Must-sees and quick local bites" },
-  { id: "full day", label: "A full day", desc: "Balanced mix, some exploring" },
-  { id: "weekend", label: "A weekend", desc: "Relaxed pace, hidden gems" },
-  { id: "week plus", label: "A week+", desc: "Off-the-beaten-path points of interest" },
+  { id: "day",     label: "Just 1 Day",  desc: "Quick Trip"       },
+  { id: "weekend", label: "2-3 Days",    desc: "Staying Around"   },
+  { id: "week",    label: "5+ Days",     desc: "Exploring"        },
 ];
 
 const PACE_OPTIONS = [
-  { id: "hustle", label: "I'm ready to hustle!", desc: "Move fast, more stops, quick bites" },
-  { id: "typical", label: "Well-paced day of adventure", desc: "Typical time at spots, some walking" },
-  { id: "easy", label: "Nice and easy, please!", desc: "Fewer stops, linger longer, sit-down meals" },
+  { id: "easy",    label: "Easy",      desc: "Here to relax"          },
+  { id: "typical", label: "Balanced",  desc: "Mix of speeds" },
+  { id: "hustle",  label: "Hustle",    desc: "Go go go!"              },
 ];
 
 const BUDGET_OPTIONS = [
-  { id: "inexpensive", label: "Keep it cheap!", desc: "Parks, street food, free entry. Splurge only for once-in-a-lifetime must-dos." },
-  { id: "mid-range", label: "Flexible for the right things!", desc: "Mid-range meals, paid attractions, faster transit if needed." },
-  { id: "YOLO vacay", label: "I'm on vacay — make the most of it!", desc: "Tours, great dining, VIP entry — no regrets." },
+  { id: "inexpensive", label: "Budget",   desc: "Keep it cheap"     },
+  { id: "mid-range",   label: "Flexible", desc: "Worth-it splurges" },
+  { id: "YOLO vacay",  label: "YOLO",     desc: "No regrets"        },
 ];
 
-type OptionProps = {
-  label: string;
-  desc: string;
-  selected: boolean;
-  onPress: () => void;
+type HorizontalOptionProps = {
+  options: { id: string; label: string; desc: string }[];
+  selected: string;
+  onSelect: (id: string) => void;
 };
+
+const VENUE_TYPES: { id: string; label: string }[] = [
+  { id: "coffee_shop",         label: "Coffee & Cafes"     },
+  { id: "restaurant",          label: "Restaurants"        },
+  { id: "street_food",         label: "Street Food"        },
+  { id: "museum",              label: "Museums"            },
+  { id: "bar",                 label: "Bars"               },
+  { id: "park_viewpoint",      label: "Parks & Viewpoints" },
+  { id: "live_music",          label: "Live Music"         },
+  { id: "attraction_landmark", label: "Landmarks"          },
+  { id: "art_gallery",         label: "Art Galleries"      },
+  { id: "market",              label: "Markets"            },
+  { id: "nightclub",           label: "Nightlife"          },
+  { id: "brewery",             label: "Breweries"          },
+  { id: "cultural_heritage",   label: "Cultural Sites"     },
+];
 
 // #endregion
 
-// #region Option Card
+// #region Horizontal Option Row
 
-function OptionCard({ label, desc, selected, onPress }: OptionProps) {
+function HorizontalOptions({ options, selected, onSelect }: HorizontalOptionProps) {
   return (
-    <TouchableOpacity
-      style={[styles.card, selected && styles.cardSelected]}
-      onPress={onPress}
-    >
-      <Text style={[styles.cardLabel, selected && styles.cardLabelSelected]}>{label}</Text>
-      <Text style={[styles.cardDesc, selected && styles.cardDescSelected]}>{desc}</Text>
-    </TouchableOpacity>
+    <View style={styles.horizontalRow}>
+      {options.map((o, i) => (
+        <TouchableOpacity
+          key={o.id}
+          style={[
+            styles.horizontalCard,
+            selected === o.id && styles.horizontalCardSelected,
+            i === 0 && styles.horizontalCardFirst,
+            i === options.length - 1 && styles.horizontalCardLast,
+          ]}
+          onPress={() => onSelect(o.id)}
+        >
+          <Text style={[styles.horizontalCardLabel, selected === o.id && styles.horizontalCardLabelSelected]}>
+            {o.label}
+          </Text>
+          <Text style={[styles.horizontalCardDesc, selected === o.id && styles.horizontalCardDescSelected]}>
+            {o.desc}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
   );
 }
 
@@ -62,7 +91,7 @@ export default function PreferencesScreen() {
 
   // #region Store
 
-  const setPreferences = useAppStore(state => state.setPreferences);
+  const { setPreferences, setVenuePreferences } = useAppStore();
 
   // #endregion
 
@@ -75,6 +104,7 @@ export default function PreferencesScreen() {
   const [saved, setSaved] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const canSave = time && pace && budget;
+  const [venuePreferences, setVenuePreferencesLocal] = useState<Record<string, "love" | "hate" | "neutral">>({});
 
   // #endregion
 
@@ -88,9 +118,20 @@ export default function PreferencesScreen() {
         setPace(saved.pace);
         setBudget(saved.budget);
         setNotes(saved.notes);
+        if (saved.venuePreferences) setVenuePreferencesLocal(saved.venuePreferences);
       }
     })();
   }, []);
+
+  // #endregion
+
+  // #region Toggle Handler
+
+  const cycleVenuePreference = (id: string) => {
+    const current = venuePreferences[id] ?? "neutral";
+    const next = current === "neutral" ? "love" : current === "love" ? "hate" : "neutral";
+    setVenuePreferencesLocal({ ...venuePreferences, [id]: next });
+  };
 
   // #endregion
 
@@ -99,46 +140,67 @@ export default function PreferencesScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
       <StatusBar style="dark" />
-      
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-      
-      <ScrollView 
-        ref={scrollViewRef}
-        contentContainerStyle={styles.container}
-      >
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.container}
+        >
 
-        <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
-        <View style={styles.headingDivider} />
+          <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
+          <View style={styles.headingDivider} />
 
-        <Text style={styles.sectionTitle}>How long is your visit?</Text>
-        <View style={styles.optionsGroup}>
-          {TIME_OPTIONS.map(o => (
-            <OptionCard key={o.id} label={o.label} desc={o.desc} selected={time === o.id} onPress={() => setTime(o.id)} />
-          ))}
-        </View>
-        <View style={styles.sectionDivider} />
+          <Text style={styles.sectionTitle}>How long is your visit?</Text>
+          <HorizontalOptions options={TIME_OPTIONS} selected={time} onSelect={setTime} />
+          <View style={styles.sectionDivider} />
 
-        <Text style={styles.sectionTitle}>How fast do you want to move?</Text>
-        <View style={styles.optionsGroup}>
-          {PACE_OPTIONS.map(o => (
-            <OptionCard key={o.id} label={o.label} desc={o.desc} selected={pace === o.id} onPress={() => setPace(o.id)} />
-          ))}
-        </View>
-        <View style={styles.sectionDivider} />
+          <Text style={styles.sectionTitle}>How fast do you want to move?</Text>
+          <HorizontalOptions options={PACE_OPTIONS} selected={pace} onSelect={setPace} />
+          <View style={styles.sectionDivider} />
 
-        <Text style={styles.sectionTitle}>How flexible is your budget?</Text>
-        <View style={styles.optionsGroup}>
-          {BUDGET_OPTIONS.map(o => (
-            <OptionCard key={o.id} label={o.label} desc={o.desc} selected={budget === o.id} onPress={() => setBudget(o.id)} />
-          ))}
-        </View>
-        <View style={styles.sectionDivider} />
+          <Text style={styles.sectionTitle}>How flexible is your budget?</Text>
+          <HorizontalOptions options={BUDGET_OPTIONS} selected={budget} onSelect={setBudget} />
+          <View style={styles.sectionDivider} />
 
-        <Text style={styles.sectionTitle}>Anything else to know? <Text style={styles.optional}>(optional)</Text></Text>
-        <View style={styles.optionsGroup}>
+          <Text style={styles.sectionTitle}>
+            Anything you{" "}
+            <Text style={styles.loveText}>LOVE </Text>
+            <Ionicons name="heart" size={17} color="#2d9e5f" />
+            {" or "}
+            <Text style={styles.hateText}>HATE </Text>
+            <Ionicons name="remove-circle" size={18} color="#c0392b" />
+            {"?"}
+          </Text>
+
+          <View style={styles.venueTypeGrid}>
+            {VENUE_TYPES.map((vt) => {
+              const state = venuePreferences[vt.id] ?? "neutral";
+              return (
+                <TouchableOpacity
+                  key={vt.id}
+                  style={styles.venueTypeRow}
+                  onPress={() => cycleVenuePreference(vt.id)}
+                >
+                  <View style={[
+                    styles.venueTypeCircle,
+                    state === "love" && styles.venueTypeCircleLove,
+                    state === "hate" && styles.venueTypeCircleHate,
+                  ]}>
+                    {state === "love" && <Ionicons name="heart" size={16} color="#fff" />}
+                    {state === "hate" && <Ionicons name="remove-circle" size={18} color="#fff" />}
+                  </View>
+                  <Text style={styles.venueTypeLabel}>{vt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sectionTitle}>
+            Anything else to know?{" "}
+            <Text style={styles.optional}>(optional)</Text>
+          </Text>
           <TextInput
             style={styles.textInput}
             placeholder="e.g. vegetarian, no museums, need good coffee..."
@@ -146,34 +208,33 @@ export default function PreferencesScreen() {
             value={notes}
             onChangeText={setNotes}
             multiline
-            onFocus={() => {           // ← add this
+            onFocus={() => {
               setTimeout(() => {
                 scrollViewRef.current?.scrollToEnd({ animated: true });
               }, 300);
             }}
           />
-        </View>
 
-        <TouchableOpacity
-          style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
-          disabled={!canSave}
-          onPress={async () => {
-            await savePreferences(time, pace, budget, notes);
-            setPreferences(time, pace, budget, notes);
-            setSaved(true);
-            setTimeout(() => {
-              setSaved(false);
-              router.push("/(tabs)/map");
-            }, 1200);
-          }}
-        >
-          <Text style={styles.saveButtonText}>
-            {saved ? "Preferences saved!  ✓" : "Save preferences"}
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
+            disabled={!canSave}
+            onPress={async () => {
+              await savePreferences(time, pace, budget, notes, venuePreferences);
+              setPreferences(time, pace, budget, notes);
+              setVenuePreferences(venuePreferences);
+              setSaved(true);
+              setTimeout(() => {
+                setSaved(false);
+                router.push("/(tabs)/map");
+              }, 1200);
+            }}
+          >
+            <Text style={styles.saveButtonText}>
+              {saved ? "Preferences saved!  ✓" : "Save preferences"}
+            </Text>
+          </TouchableOpacity>
 
-      </ScrollView>
-
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -192,69 +253,126 @@ const styles = StyleSheet.create({
 
   container: {
     padding: 12,
-    paddingBottom: 48,
+    paddingBottom: 40,
   },
   heading: {
     fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     letterSpacing: 2,
-    marginBottom: 10,
+    marginBottom: 6,
   },
   headingDivider: {
     height: 1,
     backgroundColor: "#ddd",
-    marginBottom: 24,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
-    marginBottom: 12,
+    marginBottom: 6,
     color: "#111",
-  },
-  optionsGroup: {
-    paddingLeft: 10,
-    marginBottom: 16,
   },
   sectionDivider: {
     height: 1,
     backgroundColor: "#e8e8e8",
-    marginBottom: 12,
-    marginTop: 4,
+    marginBottom: 16,
+    marginTop: 2,
   },
 
   // #endregion
 
-  // #region Option Card Styles
+  // #region Horizontal Option Cards
 
-  card: {
-    padding: 4,
+  horizontalRow: {
+    flexDirection: "row",
+    marginBottom: 10,
+    gap: 8,
+  },
+  horizontalCard: {
+    flex: 1,
+    paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 12,
     backgroundColor: "#ebebeb",
     borderWidth: 2,
     borderColor: "#d8d8d8",
-    marginBottom: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  cardSelected: {
+  horizontalCardFirst: {
+    // reserved for any first-card specific styling
+  },
+  horizontalCardLast: {
+    // reserved for any last-card specific styling
+  },
+  horizontalCardSelected: {
     backgroundColor: "#444444",
     borderColor: "#000",
   },
-  cardLabel: {
+  horizontalCardLabel: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#111",
+    fontWeight: "700",
+    color: "#222",
+    textAlign: "center",
     marginBottom: 4,
   },
-  cardLabelSelected: {
+  horizontalCardLabelSelected: {
     color: "#fff",
   },
-  cardDesc: {
-    fontSize: 13,
+  horizontalCardDesc: {
+    fontSize: 11,
     color: "#666",
+    textAlign: "center",
   },
-  cardDescSelected: {
+  horizontalCardDescSelected: {
     color: "#ccc",
+  },
+
+  // #endregion
+
+  // #region Venue Type Selectors
+
+  venueTypeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
+    paddingHorizontal: 8,
+    paddingLeft: 20,
+  },
+  venueTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "50%",
+    paddingVertical: 5,
+    gap: 6,
+  },
+  venueTypeCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#b0bdb0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  venueTypeCircleLove: {
+    backgroundColor: "#2d9e5f",
+  },
+  venueTypeCircleHate: {
+    backgroundColor: "#c0392b",
+  },
+  venueTypeLabel: {
+    fontSize: 15,
+    color: "#333",
+    fontWeight: "500",
+  },
+  loveText: {
+    color: "#2d9e5f",
+    fontWeight: "800",
+  },
+  hateText: {
+    color: "#c0392b",
+    fontWeight: "800",
   },
 
   // #endregion
