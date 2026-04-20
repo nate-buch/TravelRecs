@@ -96,6 +96,7 @@ export default function MapScreen() {
     setLocation: saveLocation,
     setTimeBlocks, legModes, setLegModes, timeBlocks,
     addRemovedVenueName, clearRemovedVenueNames,
+    setItinerary,
   } = useAppStore();
 
   const insets = useSafeAreaInsets()
@@ -105,15 +106,27 @@ export default function MapScreen() {
   // #region Local State
 
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const generateSheetRef = useRef<BottomSheet>(null);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [locationError, setLocationError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const cameraRef = useRef<MapboxGL.Camera>(null);
+  const [weatherPref, setWeatherPref] = useState<"neutral" | "include" | "exclude">("neutral");
+  const [eventsPref, setEventsPref] = useState<"neutral" | "include" | "exclude">("neutral");
 
   // Tracks the current map camera center for search result biasing
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
+
+  // Toggle Handler for Itinerary Supplemental Options
+  const cycleMapPref = (
+    current: "neutral" | "include" | "exclude",
+    setter: (v: "neutral" | "include" | "exclude") => void
+  ) => {
+    const next = current === "neutral" ? "include" : current === "include" ? "exclude" : "neutral";
+    setter(next);
+  };
 
   useEffect(() => {
     if (selectedVenue) {
@@ -182,11 +195,12 @@ export default function MapScreen() {
 
   // #endregion
 
-  // #region Generate New Itinerary
+  // #region Auto Generate 
 
-  const handleGenerateNew = async () => {
+  const handleAuto = async () => {
     if (!location) return;
     clearRemovedVenueNames();
+    generateSheetRef.current?.collapse();
     await runGeneration({
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
@@ -195,15 +209,57 @@ export default function MapScreen() {
 
   // #endregion
 
-  // #region Re-Generate Itinerary (stub — full logic in future sprint)
+  // #region Semi-Auto Generate (stub — full logic in future sprint)
 
-  const handleReGenerate = async () => {
+  const handleSemiAuto = async () => {
     if (!location || venues.length === 0) return;
-    // TODO: pass locked venues, pending venues, and removedVenueNames to Claude
+    generateSheetRef.current?.collapse();
+    // TODO: full Re-Generate implementation
+    // passes locked venues, added venues, removed venues, venue type prefs to Claude
     await runGeneration({
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
     });
+  };
+
+  // #endregion
+
+  // #region Manual Generate
+
+  const handleManual = async () => {
+    if (!location || venues.length === 0) return;
+    generateSheetRef.current?.collapse();
+    setLoading(true);
+    setError("");
+    try {
+      // Sweep up all user-added venues (pending + placed), mark all as placed
+      const allUserVenues = venues.map(v => ({ ...v, pending: false }));
+      const optimized = optimizeRoute(
+        location.coords.latitude,
+        location.coords.longitude,
+        allUserVenues
+      );
+      const legs = await getRouteLegs(
+        [location.coords.longitude, location.coords.latitude],
+        optimized
+      );
+      const modes = legs.map(leg => getDefaultMode(leg, pace));
+      const blocks = calculateSchedule(optimized, legs, pace);
+      setItinerary(optimized, legs, modes, blocks);
+      if (optimized.length > 0) {
+        const lngs = [...optimized.map(v => v.longitude), location.coords.longitude];
+        const lats = [...optimized.map(v => v.latitude), location.coords.latitude];
+        cameraRef.current?.fitBounds(
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+          80, 500
+        );
+      }
+    } catch (e: any) {
+      setError(e.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // #endregion
@@ -622,38 +678,119 @@ export default function MapScreen() {
       {!loading && venues.length === 0 && location && time && pace && budget && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
-            Tap "Generate New Itinerary" to find great spots nearby!
+            To get started, tap Generate Itinerary below or add venues above!
           </Text>
         </View>
       )}
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={[styles.generateButton, (!location || loading) && styles.buttonDisabled]}
-          onPress={handleGenerateNew}
-          disabled={!location || loading}
-        >
-          <Text style={styles.generateButtonText}>Generate New Itinerary</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.generateButton,
-            styles.reGenerateButton,
-            (!location || loading || venues.length === 0) && styles.buttonDisabled,
-          ]}
-          onPress={handleReGenerate}
-          disabled={!location || loading || venues.length === 0}
-        >
-          <Text style={styles.generateButtonText}>Re-Generate!</Text>
-          <Text style={styles.reGenerateSubtext}>
-            Considers additions,{"\n"}removals, and locks.
-          </Text>
-        </TouchableOpacity>
-      </View>
     </View>
 
-    {/* Bottom Sheet */}
+    {/* Generate Itinerary Bottom Sheet */}
+
+      <BottomSheet
+        ref={generateSheetRef}
+        index={0}
+        snapPoints={["8%", "50%"]}
+        backgroundStyle={{ backgroundColor: "#ccc", borderWidth: 2, borderColor: "#000", borderRadius: 16 }}
+        handleStyle={{ paddingTop: 8, paddingBottom: 8 }}
+        handleIndicatorStyle={{ backgroundColor: "#444" }}
+      >
+      <BottomSheetView style={styles.generateSheetContent}>
+
+        {/* Peek label */}
+
+        <TouchableOpacity
+          style={styles.generateSheetPeek}
+          onPress={() => generateSheetRef.current?.expand()}
+        >
+          <Text style={styles.generateSheetPeekLabel}>GENERATE ITINERARY</Text>
+        </TouchableOpacity>
+
+        {/* AUTO */}
+        <TouchableOpacity
+          style={[styles.generateOption, (!location || loading) && styles.generateOptionDisabled]}
+          onPress={handleAuto}
+          disabled={!location || loading}
+        >
+          <View style={styles.generateOptionLeft}>
+            <Text style={styles.generateOptionTitle}>AUTO</Text>
+            <Text style={styles.generateOptionMode}>All AI</Text>
+          </View>
+          <Text style={styles.generateOptionDesc}>
+            A fully AI-powered itinerary based exclusively on your travel preferences
+          </Text>
+        </TouchableOpacity>
+
+        {/* SEMI-AUTO */}
+        <TouchableOpacity
+          style={[styles.generateOption, (!location || loading || venues.length === 0) && styles.generateOptionDisabled]}
+          onPress={handleSemiAuto}
+          disabled={!location || loading || venues.length === 0}
+        >
+          <View style={styles.generateOptionLeft}>
+            <Text style={styles.generateOptionTitle}>SEMI-AUTO</Text>
+            <Text style={styles.generateOptionMode}>Your Input + AI</Text>
+          </View>
+          <Text style={styles.generateOptionDesc}>
+            Incorporates your additions, removals, and locks along with your preferences
+          </Text>
+        </TouchableOpacity>
+
+        {/* MANUAL */}
+        <TouchableOpacity
+          style={[styles.generateOption, (!location || loading || venues.length === 0) && styles.generateOptionDisabled]}
+          onPress={handleManual}
+          disabled={!location || loading || venues.length === 0}
+        >
+          <View style={styles.generateOptionLeft}>
+            <Text style={styles.generateOptionTitle}>MANUAL</Text>
+            <Text style={styles.generateOptionMode}>Your Stops Only</Text>
+          </View>
+          <Text style={styles.generateOptionDesc}>
+            Only uses the venues you've added yourself — no AI suggestions
+          </Text>
+        </TouchableOpacity>
+
+        {/* #region Map Preferences */}
+
+        <View style={styles.mapPrefsSection}>
+
+          <TouchableOpacity
+            style={styles.mapPrefRow}
+            onPress={() => cycleMapPref(weatherPref, setWeatherPref)}
+          >
+            <View style={[
+              styles.mapPrefCircle,
+              weatherPref === "include" && styles.mapPrefCircleInclude,
+              weatherPref === "exclude" && styles.mapPrefCircleExclude,
+            ]}>
+              {weatherPref === "include" && <Ionicons name="checkmark-sharp" size={18} color="#fff" />}
+              {weatherPref === "exclude" && <Ionicons name="remove-circle" size={20} color="#fff" />}
+            </View>
+            <Text style={styles.mapPrefLabel}>Consider local weather for AI recs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.mapPrefRow}
+            onPress={() => cycleMapPref(eventsPref, setEventsPref)}
+          >
+            <View style={[
+              styles.mapPrefCircle,
+              eventsPref === "include" && styles.mapPrefCircleInclude,
+              eventsPref === "exclude" && styles.mapPrefCircleExclude,
+            ]}>
+              {eventsPref === "include" && <Ionicons name="checkmark" size={14} color="#fff" />}
+              {eventsPref === "exclude" && <Ionicons name="remove-circle" size={16} color="#fff" />}
+            </View>
+            <Text style={styles.mapPrefLabel}>Search for relevant live events</Text>
+          </TouchableOpacity>
+
+        </View>
+
+      </BottomSheetView>
+    </BottomSheet>
+
+    {/* Venue Bottom Sheet */}
     
     <BottomSheet
       ref={bottomSheetRef}
@@ -722,7 +859,7 @@ const styles = StyleSheet.create({
 
   overlayContainer: {
     position: "absolute",
-    bottom: 10,
+    bottom: 50,
     left: 16,
     right: 16,
     maxHeight: "70%",
@@ -829,40 +966,6 @@ const styles = StyleSheet.create({
 
   // #endregion
 
-  // #region Generate Buttons
-
-  buttonRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 2,
-  },
-  generateButton: {
-    flex: 1,
-    backgroundColor: "#000",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reGenerateButton: {
-    backgroundColor: "#000",
-  },
-  generateButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  reGenerateSubtext: {
-    color: "#aaa",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 2,
-  },
-
-  // #endregion
-
   // #region Pending Venue
 
   pendingNote: {
@@ -903,6 +1006,100 @@ const styles = StyleSheet.create({
     height: 4,
     backgroundColor: "#000",
     borderRadius: 2,
+  },
+
+  // #endregion
+
+  // #region Generate Itinerary Bottom Sheet
+
+  generateSheetContent: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 0,
+  },
+  generateSheetPeek: {
+    alignItems: "center",
+    paddingBottom: 6,
+  },
+  generateSheetPeekLabel: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "#333",
+  },
+
+  generateOption: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    borderWidth: 2,
+    borderColor: "#111",
+    borderRadius: 12,
+    padding: 6,
+    marginBottom: 8,
+    gap: 12,
+    backgroundColor: "#ebebeb",
+  },
+  generateOptionDisabled: {
+    opacity: 0.4,
+  },
+  generateOptionLeft: {
+    width: 90,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  generateOptionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111",
+    letterSpacing: 0.5,
+  },
+  generateOptionMode: {
+    fontSize: 12,
+    color: "#888",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  generateOptionDesc: {
+    flex: 1,
+    fontSize: 12,
+    color: "#555",
+    lineHeight: 17,
+    alignSelf: "center",
+  },
+
+  mapPrefsSection: {
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+    paddingTop: 6,
+    paddingLeft: 40,
+  },
+  mapPrefRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  mapPrefCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#b0bdb0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapPrefCircleInclude: {
+    backgroundColor: "#2d9e5f",
+  },
+  mapPrefCircleExclude: {
+    backgroundColor: "#c0392b",
+  },
+  mapPrefLabel: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "400",
+    flex: 1,
   },
 
   // #endregion

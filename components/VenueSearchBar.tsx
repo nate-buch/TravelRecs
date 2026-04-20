@@ -114,6 +114,8 @@ const styles = StyleSheet.create({
   searchBarContainer: {
     borderRadius: 12,
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#bbb",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
