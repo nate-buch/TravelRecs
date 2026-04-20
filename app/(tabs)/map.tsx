@@ -691,7 +691,7 @@ export default function MapScreen() {
         ref={generateSheetRef}
         index={0}
         snapPoints={["8%", "50%"]}
-        backgroundStyle={{ backgroundColor: "#ccc", borderWidth: 2, borderColor: "#000", borderRadius: 16 }}
+        backgroundStyle={{ backgroundColor: "#ccc", borderWidth: 2, borderColor: "#aaa", borderRadius: 16 }}
         handleStyle={{ paddingTop: 8, paddingBottom: 8 }}
         handleIndicatorStyle={{ backgroundColor: "#444" }}
       >
@@ -779,8 +779,8 @@ export default function MapScreen() {
               eventsPref === "include" && styles.mapPrefCircleInclude,
               eventsPref === "exclude" && styles.mapPrefCircleExclude,
             ]}>
-              {eventsPref === "include" && <Ionicons name="checkmark" size={14} color="#fff" />}
-              {eventsPref === "exclude" && <Ionicons name="remove-circle" size={16} color="#fff" />}
+              {eventsPref === "include" && <Ionicons name="checkmark-sharp" size={18} color="#fff" />}
+              {eventsPref === "exclude" && <Ionicons name="remove-circle" size={20} color="#fff" />}
             </View>
             <Text style={styles.mapPrefLabel}>Search for relevant live events</Text>
           </TouchableOpacity>
@@ -1032,9 +1032,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     borderWidth: 2,
-    borderColor: "#111",
+    borderColor: "#bbb",
     borderRadius: 12,
-    padding: 6,
+    padding: 4,
     marginBottom: 8,
     gap: 12,
     backgroundColor: "#ebebeb",
@@ -1043,13 +1043,13 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   generateOptionLeft: {
-    width: 90,
+    width: 100,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
   },
   generateOptionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "800",
     color: "#111",
     letterSpacing: 0.5,
@@ -1066,6 +1066,7 @@ const styles = StyleSheet.create({
     color: "#555",
     lineHeight: 17,
     alignSelf: "center",
+
   },
 
   mapPrefsSection: {
@@ -1073,7 +1074,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#e0e0e0",
     paddingTop: 6,
-    paddingLeft: 40,
+    paddingLeft: 44,
   },
   mapPrefRow: {
     flexDirection: "row",
@@ -1097,8 +1098,8 @@ const styles = StyleSheet.create({
   },
   mapPrefLabel: {
     fontSize: 14,
-    color: "#333",
-    fontWeight: "400",
+    color: "#444",
+    fontWeight: "500",
     flex: 1,
   },
 
