@@ -9,13 +9,14 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { DaySelector } from "../../components/DaySelector";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration } from "../config/durations";
 import { getNearbyPlaces } from "../config/places";
-import { optimizeRoute } from "../config/routing";
+import { optimizeRoute, optimizeRouteFromUser } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
 
@@ -34,15 +35,6 @@ const LOADING_MESSAGES = [
 
 const PENDING_MARKER_COLOR = "#888888";
 const PENDING_MARKER_LABEL = "Add to your Itinerary!";
-
-interface SearchResult {
-  name: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  types: string[];
-  placeId: string;
-};
 
 // #endregion
 
@@ -113,20 +105,11 @@ export default function MapScreen() {
   const [error, setError] = useState("");
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const cameraRef = useRef<MapboxGL.Camera>(null);
-  const [weatherPref, setWeatherPref] = useState<"neutral" | "include" | "exclude">("neutral");
-  const [eventsPref, setEventsPref] = useState<"neutral" | "include" | "exclude">("neutral");
+  const [weatherEnabled, setWeatherEnabled] = useState(false);
+  const [eventsEnabled, setEventsEnabled] = useState(false);
 
   // Tracks the current map camera center for search result biasing
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
-
-  // Toggle Handler for Itinerary Supplemental Options
-  const cycleMapPref = (
-    current: "neutral" | "include" | "exclude",
-    setter: (v: "neutral" | "include" | "exclude") => void
-  ) => {
-    const next = current === "neutral" ? "include" : current === "include" ? "exclude" : "neutral";
-    setter(next);
-  };
 
   useEffect(() => {
     if (selectedVenue) {
@@ -195,7 +178,7 @@ export default function MapScreen() {
 
   // #endregion
 
-  // #region Auto Generate 
+  // #region Route Generation: Auto 
 
   const handleAuto = async () => {
     if (!location) return;
@@ -209,7 +192,7 @@ export default function MapScreen() {
 
   // #endregion
 
-  // #region Semi-Auto Generate (stub — full logic in future sprint)
+  // #region Route Generation: Semi-Auto (stub — full logic in future sprint)
 
   const handleSemiAuto = async () => {
     if (!location || venues.length === 0) return;
@@ -224,7 +207,7 @@ export default function MapScreen() {
 
   // #endregion
 
-  // #region Manual Generate
+  // #region Route Generation: Manual
 
   const handleManual = async () => {
     if (!location || venues.length === 0) return;
@@ -234,7 +217,8 @@ export default function MapScreen() {
     try {
       // Sweep up all user-added venues (pending + placed), mark all as placed
       const allUserVenues = venues.map(v => ({ ...v, pending: false }));
-      const optimized = optimizeRoute(
+      const previousNonPending = venues.filter(v => !v.pending);
+      const optimized = optimizeRouteFromUser(
         location.coords.latitude,
         location.coords.longitude,
         allUserVenues
@@ -244,7 +228,7 @@ export default function MapScreen() {
         optimized
       );
       const modes = legs.map(leg => getDefaultMode(leg, pace));
-      const blocks = calculateSchedule(optimized, legs, pace);
+      const blocks = recalculateSchedule(optimized, legs, timeBlocks, previousNonPending, modes);
       setItinerary(optimized, legs, modes, blocks);
       if (optimized.length > 0) {
         const lngs = [...optimized.map(v => v.longitude), location.coords.longitude];
@@ -354,7 +338,8 @@ export default function MapScreen() {
         style={styles.map}
         styleURL="mapbox://styles/flashpackingguide/cmngh698v007501qo9tazbw0c?fresh=true"
         scaleBarEnabled={false}
-        scaleBarPosition={{ bottom: 200, left: 8 }}
+        compassEnabled={true}
+        compassPosition={{ top: 60, right: 8 }}
         onCameraChanged={(state) => {
           const c = state.properties.center;
           if (c) setCameraCenter([c[0], c[1]]);
@@ -702,7 +687,12 @@ export default function MapScreen() {
         ref={generateSheetRef}
         index={0}
         snapPoints={["8%", "50%"]}
-        backgroundStyle={{ backgroundColor: "#ccc", borderWidth: 2, borderColor: "#aaa", borderRadius: 16 }}
+        backgroundStyle={{ 
+          backgroundColor: "#ccc", 
+          borderWidth: 2, 
+          borderColor: "#aaa", 
+          borderRadius: 16,
+        }}
         handleStyle={{ paddingTop: 8, paddingBottom: 8 }}
         handleIndicatorStyle={{ backgroundColor: "#444" }}
       >
@@ -762,39 +752,43 @@ export default function MapScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* #region Map Preferences */}
+        {/* #region Options Section */}
 
-        <View style={styles.mapPrefsSection}>
+        <View style={{ height: 1, backgroundColor: "#ddd", marginBottom: 6 }} />
+        <View style={styles.optionsLabelContainer}>
+          <Text style={styles.optionsLabel}>OPTIONS</Text>
+          <View style={styles.optionsLabelUnderline} />
+        </View>
 
-          <TouchableOpacity
-            style={styles.mapPrefRow}
-            onPress={() => cycleMapPref(weatherPref, setWeatherPref)}
-          >
-            <View style={[
-              styles.mapPrefCircle,
-              weatherPref === "include" && styles.mapPrefCircleInclude,
-              weatherPref === "exclude" && styles.mapPrefCircleExclude,
-            ]}>
-              {weatherPref === "include" && <Ionicons name="checkmark-sharp" size={18} color="#fff" />}
-              {weatherPref === "exclude" && <Ionicons name="remove-circle" size={20} color="#fff" />}
-            </View>
-            <Text style={styles.mapPrefLabel}>Consider local weather for AI recs</Text>
-          </TouchableOpacity>
+        <View style={styles.optionsRow}>
 
-          <TouchableOpacity
-            style={styles.mapPrefRow}
-            onPress={() => cycleMapPref(eventsPref, setEventsPref)}
-          >
-            <View style={[
-              styles.mapPrefCircle,
-              eventsPref === "include" && styles.mapPrefCircleInclude,
-              eventsPref === "exclude" && styles.mapPrefCircleExclude,
-            ]}>
-              {eventsPref === "include" && <Ionicons name="checkmark-sharp" size={18} color="#fff" />}
-              {eventsPref === "exclude" && <Ionicons name="remove-circle" size={20} color="#fff" />}
-            </View>
-            <Text style={styles.mapPrefLabel}>Search for relevant live events</Text>
-          </TouchableOpacity>
+        <View style={styles.optionsDaySelector}>
+          <View style={styles.daySelectorBorders}>
+            <DaySelector />
+          </View>
+        </View>
+
+          <View style={styles.optionsToggles}>
+            <TouchableOpacity
+              style={styles.mapPrefRow}
+              onPress={() => setWeatherEnabled(prev => !prev)}
+            >
+              <View style={[styles.mapPrefCircle, weatherEnabled && styles.mapPrefCircleActive]}>
+                {weatherEnabled && <Ionicons name="checkmark" size={20} color="#fff" />}
+              </View>
+              <Text style={styles.mapPrefLabel}>Check local weather for AI recs</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.mapPrefRow}
+              onPress={() => setEventsEnabled(prev => !prev)}
+            >
+              <View style={[styles.mapPrefCircle, eventsEnabled && styles.mapPrefCircleActive]}>
+                {eventsEnabled && <Ionicons name="checkmark" size={20} color="#fff" />}
+              </View>
+              <Text style={styles.mapPrefLabel}>Search for relevant live events</Text>
+            </TouchableOpacity>
+          </View>
 
         </View>
 
@@ -1089,13 +1083,49 @@ const styles = StyleSheet.create({
 
   },
 
-  mapPrefsSection: {
-    marginTop: 2,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-    paddingTop: 6,
-    paddingLeft: 44,
+  optionsLabelContainer: {
+    alignItems: "center",
+    marginTop: 0,
+    marginBottom: 0,
   },
+  optionsLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#888",
+    letterSpacing: 2,
+    textAlign: "center",
+    textTransform: "uppercase",
+  },
+  optionsLabelUnderline: {
+    height: 1.5,
+    backgroundColor: "#888",
+    width: "25%",
+    marginTop: 1,  // ← controls gap between text and underline
+  },
+  optionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 20,
+  },
+  optionsDaySelector: {
+    width: "20%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+    paddingLeft: 24,
+  },
+  daySelectorBorders: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "#ddd",
+    paddingVertical: 6,
+    alignSelf: "center",
+  },
+  optionsToggles: {
+    flex: 1,
+    paddingLeft: 4,
+  },
+
   mapPrefRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1110,11 +1140,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  mapPrefCircleInclude: {
+  mapPrefCircleActive: {
     backgroundColor: "#2d9e5f",
-  },
-  mapPrefCircleExclude: {
-    backgroundColor: "#c0392b",
   },
   mapPrefLabel: {
     fontSize: 14,

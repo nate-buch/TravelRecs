@@ -9,18 +9,27 @@ export default function TabLayout() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
-      headerTitleAlign: "center",
       tabBarStyle: {
         height: 60 + insets.bottom,
         paddingBottom: insets.bottom,
-        paddingTop: 5,
+        paddingTop: 0,
+        backgroundColor: "#fff",
+        borderTopWidth: 0,
+        borderTopColor: "#111",
+        elevation: 0,
       },
-      tabBarLabelStyle: { fontSize: 14 },
-      headerTitle: () => (
-        <Text style={{ fontSize: 20, fontWeight: "bold", letterSpacing: 2 }}>
-          TRAVEL RECS: DAY PLANNER
-        </Text>
-      ),
+      tabBarItemStyle: {
+        borderWidth: 0,
+        overflow: "visible",
+      },
+      tabBarActiveTintColor: "#111",
+      tabBarInactiveTintColor: "#999",
+      tabBarActiveBackgroundColor: "#f0f0f0",
+      tabBarInactiveBackgroundColor: "#fff",
+      tabBarLabelStyle: { 
+        fontSize: 15,
+        fontWeight: "800",
+      },
     }}>
       <Tabs.Screen
         name="map"

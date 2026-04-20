@@ -644,7 +644,15 @@ export default function ItineraryScreen() {
 
           const newModes = legs.map((leg) => getDefaultMode(leg, pace));
 
-          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, nonPending, newModes);
+          console.log("timeBlocks before recalc:", timeBlocks.map((b, i) => ({ 
+            venue: venues.filter(v => !v.pending)[i]?.name, 
+            locked: b.locked 
+          })));
+          console.log("nonPending after drag:", nonPending.map(v => v.name));
+          
+          const previousNonPending = venues.filter(v => !v.pending);
+
+          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, previousNonPending, newModes);
           setItinerary(updated, legs, newModes, blocks);
         } else {
           setVenues(updated);
@@ -1003,7 +1011,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginHorizontal: 8,
   },
-  
+
   positionHereLabel: {
     fontSize: 20,
     fontWeight: "600",

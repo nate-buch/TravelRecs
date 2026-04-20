@@ -1,6 +1,6 @@
 // #region Imports
 
-import { PlacesVenue } from "./places";
+import { getPlaceDetails, PlaceHours, PlacesVenue } from "./places";
 
 // #endregion
 
@@ -11,12 +11,14 @@ export type Venue = {
   latitude: number;
   longitude: number;
   justification: string;
-  hours: string;
+  hours: string[];
+  placeId?: string;
+  placeHours?: PlaceHours;
   address: string;
   types?: string[];
   venueType?: string;
   locked?: boolean;
-  pending?: boolean;  // true when added via search, not yet placed in route
+  pending?: boolean;
 };
 
 // #endregion
@@ -90,7 +92,6 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   {
     "name": "Exact venue name from the list above",
     "justification": "One sentence tailored to their preferences and why NOW is a good time to visit",
-    "hours": "Opening hours if known, otherwise Verify before visiting",
     "venueType": "one of: coffee_shop, restaurant, street_food, museum, bar, park_viewpoint, live_music, attraction_landmark, art_gallery, market, nightclub, brewery, cultural_heritage"
   }
 ]`
@@ -129,21 +130,32 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   // #region Match Venues to Places Data
 
   try {
-    const parsed = JSON.parse(clean) as { name: string; justification: string; hours: string; venueType: string }[];
-    return parsed.map(item => {
+    const parsed = JSON.parse(clean) as { name: string; justification: string; venueType: string }[];
+    
+    const venues = await Promise.all(parsed.map(async item => {
       const match = nearbyPlaces.find(p => p.name === item.name);
+      
+      // Fetch live hours from Google Places if we have a placeId
+      const placeHours = match?.placeId 
+        ? await getPlaceDetails(match.placeId)
+        : null;
+
       return {
         name: item.name,
         latitude: match?.latitude ?? 0,
         longitude: match?.longitude ?? 0,
         address: match?.address ?? "",
         justification: item.justification,
-        hours: item.hours,
+        hours: placeHours?.weekdayText ?? [],
+        placeId: match?.placeId,
+        placeHours: placeHours,
         types: match?.types ?? [],
         venueType: item.venueType,
         pending: false,
       };
-    }).filter(v => v.latitude !== 0);
+    }));
+
+    return venues.filter(v => v.latitude !== 0);
   } catch {
     throw new Error("Failed to parse itinerary. Please try again.");
   }

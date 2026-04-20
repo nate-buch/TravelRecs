@@ -143,6 +143,10 @@ const sanityCheck = (venues: Venue[]): Venue[] => {
 
 // #region Main Route Optimization API
 
+
+// Optimizes for AI-generated routes, keeping the first venue fixed and 
+// optimizing the rest for flow and distance. 
+
 export const optimizeRoute = (
   userLat: number,
   userLng: number,
@@ -158,6 +162,27 @@ export const optimizeRoute = (
   const checked = sanityCheck(optimized);
 
   return [first, ...checked];
+};
+
+// Optimizes for purely user-generated routes, 
+// allowing the first venue to shift for better flow.
+
+export const optimizeRouteFromUser = (
+  userLat: number,
+  userLng: number,
+  venues: Venue[]
+): Venue[] => {
+  if (venues.length === 0) return venues;
+  if (venues.length <= 2) {
+    // Still run nearest neighbor for 1-2 venues to get correct order from user location
+    return nearestNeighbor(userLat, userLng, venues);
+  }
+
+  const nn = nearestNeighbor(userLat, userLng, venues);
+  const optimized = twoOpt(userLat, userLng, nn);
+  const checked = sanityCheck(optimized);
+
+  return checked;
 };
 
 // #endregion

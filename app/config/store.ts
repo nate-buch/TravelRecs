@@ -23,6 +23,14 @@ type AppStore = {
   venuePreferences: Record<string, "love" | "hate" | "neutral">;
   setVenuePreferences: (prefs: Record<string, "love" | "hate" | "neutral">) => void;
 
+  // ─── Travel Day ───────────────────────────────────────────────────────────
+  // The day of week the user is planning for. Defaults to "today".
+  // Used to display correct hours of operation and as input to TRAVEL.
+
+  travelDay: "today" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+  setTravelDay: (day: "today" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN") => void;
+
+
   // ─── Device Location ─────────────────────────────────────────────────────
   // The user's GPS coordinates, obtained on app load. Used as the starting
   // point for route optimization and itinerary generation.
@@ -81,6 +89,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ─── Venue Preferences ───────────────────────────────────────────────────
   venuePreferences: {},
   setVenuePreferences: (prefs) => set({ venuePreferences: prefs }),
+
+  // ─── Travel Day ───────────────────────────────────────────────────────────
+  travelDay: "today",
+  setTravelDay: (day) => set({ travelDay: day }),
 
   // ─── Device Location ─────────────────────────────────────────────────────
   location: null,
