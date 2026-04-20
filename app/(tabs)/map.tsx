@@ -337,7 +337,7 @@ export default function MapScreen() {
 
     <View style={{
       position: "absolute",
-      top: insets.top + 10,
+      top: insets.top - 20,
       left: 12,
       right: 12,
       zIndex: 10,
@@ -353,11 +353,13 @@ export default function MapScreen() {
       <MapboxGL.MapView 
         style={styles.map}
         styleURL="mapbox://styles/flashpackingguide/cmngh698v007501qo9tazbw0c?fresh=true"
+        scaleBarEnabled={false}
+        scaleBarPosition={{ bottom: 200, left: 8 }}
         onCameraChanged={(state) => {
           const c = state.properties.center;
           if (c) setCameraCenter([c[0], c[1]]);
         }}
-      >
+      >    
 
     {/* #region Camera */}
 
@@ -650,6 +652,15 @@ export default function MapScreen() {
 
     </MapboxGL.MapView>
 
+    {!loading && venues.length === 0 && location && time && pace && budget && (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyStateText}>
+          To get started, tap Generate Itinerary below or add venues above!
+        </Text>
+      </View>
+    )}
+
+
     {/* #region Overlays */}
 
     <View style={styles.overlayContainer}>
@@ -884,6 +895,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#fff",
     textAlign: "center",
+    paddingTop: 2,
   },
 
   // #endregion
@@ -953,14 +965,22 @@ const styles = StyleSheet.create({
   generateButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 
   emptyState: {
-    backgroundColor: "rgba(255,255,255,0.95)",
+    position: "absolute",
+    top: "50%",
+    left: 20,
+    right: 20,
+    backgroundColor: "#fff",
+    opacity: 0.93,
     borderRadius: 12,
     padding: 16,
-    marginBottom: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   emptyStateText: {
-    fontSize: 14,
-    color: "#555",
+    fontSize: 16,
+    color: "#888",
+    fontWeight: "500",
     textAlign: "center",
   },
 
