@@ -85,27 +85,29 @@ export function VenueSearchBar({ cameraCenter, onSelect, placeholder }: VenueSea
           <ActivityIndicator size="small" color="#888" style={{ marginRight: 8 }} />
         )}
       </View>
-      {results.length > 0 && (
-        <FlatList
-          data={results}
-          keyExtractor={item => item.placeId}
-          style={styles.searchResults}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.searchResultItem}
-              onPress={() => handleSelect(item)}
-            >
-              <Text style={styles.searchResultName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Text style={styles.searchResultAddress} numberOfLines={1}>
-                {item.address}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
-      )}
+        {results.length > 0 && (
+          <View style={styles.searchResultsContainer}>
+            <FlatList
+              data={results}
+              keyExtractor={item => item.placeId}
+              style={styles.searchResults}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.searchResultItem}
+                  onPress={() => handleSelect(item)}
+                >
+                  <Text style={styles.searchResultName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.searchResultAddress} numberOfLines={1}>
+                    {item.address}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
     </View>
   );
 }
@@ -134,6 +136,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#eee",
     maxHeight: 220,
+  },
+  searchResultsContainer: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bbb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 100,
   },
   searchResultItem: {
     paddingHorizontal: 14,

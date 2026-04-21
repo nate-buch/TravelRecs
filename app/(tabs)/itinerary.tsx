@@ -13,6 +13,8 @@ import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration, formatTime, roundToQuarter } from "../config/durations";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+import { getHoursForDay, getDayBar } from "../config/places";
+import { DaySelector } from "../../components/DaySelector";
 
 // #endregion
 
@@ -43,7 +45,7 @@ export default function ItineraryScreen() {
     venues, time, pace, budget, routeLegs,
     setVenues, setRouteLegs, setTimeBlocks, setItinerary,
     location, timeBlocks, legModes, setLegModes,
-    addRemovedVenueName,
+    addRemovedVenueName, travelDay,
   } = useAppStore();
 
   const insets = useSafeAreaInsets();
@@ -804,8 +806,44 @@ export default function ItineraryScreen() {
                   
                   <Text style={styles.venueAddress}>{venue.address}</Text>
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
-                  <Text style={styles.venueHours}>🕐 {venue.hours}</Text>
                   
+                  <Text style={styles.venueHours}>
+                    Hours: {Array.isArray(venue.hours) ? getHoursForDay(venue.hours, travelDay) : venue.hours}
+                  </Text>
+
+                  {Array.isArray(venue.hours) && venue.hours.length > 0 && (
+                    <View style={styles.dayBarRow}>
+                      <Text style={styles.dayBarPrefix}>Days: </Text>
+                      {getDayBar(venue.hours).map((d, i) => {
+                        const days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+                        const todayIndex = new Date().getDay(); // 0=Sun
+                        const adjustedIndex = todayIndex === 0 ? 6 : todayIndex - 1; // convert to Mo=0
+                        const isCurrentDay = travelDay === "today" 
+                          ? i === adjustedIndex 
+                          : d.day.toUpperCase() === travelDay.slice(0, 2).toUpperCase();
+                        return (
+                          <View
+                            key={d.day}
+                            style={[
+                              styles.dayBarItemWrapper,
+                              isCurrentDay && styles.dayBarItemWrapperActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.dayBarItem,
+                                d.isOpen ? styles.dayBarOpen : styles.dayBarClosed,
+                                isCurrentDay && styles.dayBarCurrent,
+                              ]}
+                            >
+                              {d.day}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}                  
+
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => removeVenue(venue.name)}
@@ -893,26 +931,47 @@ export default function ItineraryScreen() {
       contentContainerStyle={{ paddingBottom: 10 }}
     />
 
-    {/* Overlaid search bar */}
+  {/* Overlaid search bar */}
 
-    <View style={{
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: "#fff",
-      paddingHorizontal: 12,
-      paddingTop: insets.top + 12,
-      paddingBottom: 8,
-      zIndex: 10,
-    }}>
-      <Text style={styles.heading}>YOUR ITINERARY</Text>
-        <VenueSearchBar
-          cameraCenter={null}
-          onSelect={handleSearchSelect}
-          placeholder="Search for a venue to add..."
-        />
-    </View>
+  <View style={{
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingTop: insets.top + 12,
+    paddingBottom: 8,
+    zIndex: 10,
+  }}>
+    <Text style={styles.heading}>YOUR ITINERARY</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        <View style={{ flex: 1, minWidth: 0, marginLeft: -6, marginRight: 0 }}>
+          <VenueSearchBar
+            cameraCenter={null}
+            onSelect={handleSearchSelect}
+            placeholder="Search for destinations..."
+          />
+        </View>
+        <View style={{
+          borderRadius: 12,
+          backgroundColor: "#fff",
+          borderWidth: 1,
+          borderColor: "#bbb",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
+          elevation: 4,
+          paddingHorizontal: 2,
+          marginRight: -6,
+          alignSelf: "stretch",
+          justifyContent: "center",
+        }}>
+          <DaySelector />
+        </View>
+      </View>
+  </View>
 
   </SafeAreaView>
 
@@ -1094,11 +1153,12 @@ const styles = StyleSheet.create({
   },
   venueNumberText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "bold",
   },
   venueContent: {
     flex: 1,
+    flexShrink: 1,
   },
 
   venueNameRow: {
@@ -1129,14 +1189,53 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   venueJustification: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#444",
     lineHeight: 20,
     marginBottom: 3,
   },
   venueHours: {
     fontSize: 13,
-    color: "#666",
+    fontWeight: "500",
+    color: "#111",
+  },
+
+  dayBarRow: {
+    flexDirection: "row",
+    gap: 2,
+    marginTop: 2,
+    alignItems: "center",
+  },
+  dayBarPrefix: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#333",
+  },
+  dayBarItem: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  dayBarCurrent: {
+    fontWeight: "900",
+  },
+  dayBarItemWrapper: {
+    borderRadius: 4,
+    paddingHorizontal: 0,
+    paddingVertical: 1,
+    width: 18,
+    alignItems: "center",
+  },
+  dayBarItemWrapperActive: {
+    backgroundColor: "#ddd",
+    borderRadius: 5,
+    borderWidth: 0.5,
+    borderColor: "#999",
+  },
+  dayBarOpen: {
+    color: "#2d9e5f",
+  },
+  dayBarClosed: {
+    color: "#c0392b",
   },
 
   removeButton: {
@@ -1166,22 +1265,22 @@ const styles = StyleSheet.create({
   timeBlock: {
     alignItems: "center",
     justifyContent: "center",
-    paddingLeft: 8,
-    paddingRight: 6,
+    paddingLeft: 4,
+    paddingRight: 4,
     paddingTop: 8,
-    width: 95,
+    width: 80,
   },
   timeBlockTimeContainer: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
+    width: "90%",
     paddingVertical: 4,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: "#e0e0e0",
     marginBottom: 6,
     justifyContent: "center",
-    gap: 2,
+    gap: 0,
   },
   timeBlockTime: {
     fontSize: 15,

@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   chevron: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "900",
     color: "#444",
     paddingHorizontal: 0,
   },
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#111",
     letterSpacing: 1,
   },

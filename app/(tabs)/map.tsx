@@ -686,7 +686,7 @@ export default function MapScreen() {
       <BottomSheet
         ref={generateSheetRef}
         index={0}
-        snapPoints={["8%", "50%"]}
+        snapPoints={["8%", "52%"]}
         backgroundStyle={{ 
           backgroundColor: "#ccc", 
           borderWidth: 2, 
@@ -754,7 +754,7 @@ export default function MapScreen() {
 
         {/* #region Options Section */}
 
-        <View style={{ height: 1, backgroundColor: "#ddd", marginBottom: 6 }} />
+        <View style={{ height: 1.5, backgroundColor: "#aaa", marginBottom: 6 }} />
         <View style={styles.optionsLabelContainer}>
           <Text style={styles.optionsLabel}>OPTIONS</Text>
           <View style={styles.optionsLabelUnderline} />
@@ -762,11 +762,11 @@ export default function MapScreen() {
 
         <View style={styles.optionsRow}>
 
-        <View style={styles.optionsDaySelector}>
-          <View style={styles.daySelectorBorders}>
-            <DaySelector />
+          <View style={styles.optionsDaySelector}>
+            <View style={styles.daySelectorBorders}>
+              <DaySelector />
+            </View>
           </View>
-        </View>
 
           <View style={styles.optionsToggles}>
             <TouchableOpacity
@@ -776,7 +776,9 @@ export default function MapScreen() {
               <View style={[styles.mapPrefCircle, weatherEnabled && styles.mapPrefCircleActive]}>
                 {weatherEnabled && <Ionicons name="checkmark" size={20} color="#fff" />}
               </View>
-              <Text style={styles.mapPrefLabel}>Check local weather for AI recs</Text>
+              <Text style={[styles.mapPrefLabel, weatherEnabled && styles.mapPrefLabelActive]}>
+                Check local weather for AI recs
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -786,7 +788,9 @@ export default function MapScreen() {
               <View style={[styles.mapPrefCircle, eventsEnabled && styles.mapPrefCircleActive]}>
                 {eventsEnabled && <Ionicons name="checkmark" size={20} color="#fff" />}
               </View>
-              <Text style={styles.mapPrefLabel}>Search for relevant live events</Text>
+              <Text style={[styles.mapPrefLabel, eventsEnabled && styles.mapPrefLabelActive]}>
+                Search for relevant live events
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -1042,6 +1046,8 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
+  // #region Generation Modes
+
   generateOption: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -1083,53 +1089,57 @@ const styles = StyleSheet.create({
 
   },
 
+  // #endregion
+
+  // #region Generation Options
+
   optionsLabelContainer: {
     alignItems: "center",
-    marginTop: 0,
-    marginBottom: 0,
+    marginTop: 2,
+    marginBottom: 2,
   },
   optionsLabel: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "800",
-    color: "#888",
+    color: "#222",
     letterSpacing: 2,
     textAlign: "center",
     textTransform: "uppercase",
   },
   optionsLabelUnderline: {
-    height: 1.5,
-    backgroundColor: "#888",
+    height: 0,
+    backgroundColor: "#222",
     width: "25%",
-    marginTop: 1,  // ← controls gap between text and underline
+    marginTop: 1,
   },
   optionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 20,
+    gap: 26,
   },
   optionsDaySelector: {
     width: "20%",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 16,
-    paddingLeft: 24,
+    paddingLeft: 30,
   },
   daySelectorBorders: {
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#999",
     paddingVertical: 6,
     alignSelf: "center",
   },
   optionsToggles: {
     flex: 1,
-    paddingLeft: 4,
+    paddingLeft: 2,
   },
 
   mapPrefRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
     paddingVertical: 6,
   },
   mapPrefCircle: {
@@ -1149,6 +1159,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     flex: 1,
   },
+  mapPrefLabelActive: {
+    fontWeight: "700",
+    color: "#111",
+  },
+
+  // #endregion
 
   // #endregion
 

@@ -66,3 +66,65 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceHours | nul
     return null;
   }
 };
+
+// #region Days and Hours Extraction
+
+export type DayBar = {
+  day: string;      // "Mo", "Tu" etc
+  isOpen: boolean;
+};
+
+const DAY_MAP: Record<string, string> = {
+  "today": "",  // resolved at call time
+  "MON": "Monday",
+  "TUE": "Tuesday",
+  "WED": "Wednesday",
+  "THU": "Thursday",
+  "FRI": "Friday",
+  "SAT": "Saturday",
+  "SUN": "Sunday",
+};
+
+const TODAY_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export const resolveDay = (travelDay: string): string => {
+  if (travelDay === "today") return TODAY_DAY_NAMES[new Date().getDay()];
+  return DAY_MAP[travelDay] ?? "";
+};
+
+export const getHoursForDay = (
+  hours: string[],
+  travelDay: string
+): string => {
+  if (!hours || hours.length === 0) return "Verify before visiting";
+  
+  const dayName = resolveDay(travelDay);
+  const entry = hours.find(h => h.startsWith(dayName));
+  
+  if (!entry) return "Verify before visiting";
+  
+  const hoursStr = entry.split(": ").slice(1).join(": ");
+  
+  if (!hoursStr || hoursStr === "Closed") return travelDay === "today" ? "Closed today" : "Closed";
+  
+  if (travelDay === "today") {
+    const [openStr, closeStr] = hoursStr.split(" – ");
+    if (!closeStr) return hoursStr;
+    return `Open ${openStr} – ${closeStr}`;
+  }
+  
+  return hoursStr;
+};
+
+export const getDayBar = (hours: string[]): DayBar[] => {
+  const days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const fullNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  
+  return days.map((day, i) => {
+    const entry = hours.find(h => h.startsWith(fullNames[i]));
+    const isOpen = entry ? !entry.includes("Closed") : false;
+    return { day, isOpen };
+  });
+};
+
+// #endregion
