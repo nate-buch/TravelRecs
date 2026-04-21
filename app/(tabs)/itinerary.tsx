@@ -12,7 +12,7 @@ import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration, formatTime, roundToQuarter } from "../config/durations";
-import { getHoursForDay, getDayBar, getPlaceDetails, getScheduleConflict } from "../config/places";
+import { getDayBar, getHoursForDay, getPlaceDetails, getScheduleConflict } from "../config/places";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
 
@@ -822,7 +822,18 @@ export default function ItineraryScreen() {
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   
                   <Text style={[styles.venueHours, !hoursDisplay.isOpen && { color: "#922b21", fontWeight: "700" }]}>
-                    Hours: {hoursDisplay.text}{conflict.hoursConflict ? <Text style={{ color: "#922b21", fontWeight: "900", fontSize: 13 }}> (!)</Text> : null}
+                    {"Hours: "}
+                    {hoursDisplay.openTime ?? hoursDisplay.text}
+                    {conflict.arrivalConflict && hoursDisplay.openTime
+                      ? <Ionicons name="alert-circle-outline" size={14} color="#922b21" />
+                      : null}
+                    {hoursDisplay.openTime && hoursDisplay.closeTime
+                      ? <Text>{" \u2013 "}</Text>
+                      : null}
+                    {hoursDisplay.closeTime ?? null}
+                    {conflict.departureConflict && hoursDisplay.closeTime
+                      ? <Ionicons name="alert-circle-outline" size={14} color="#922b21" />
+                      : null}
                   </Text>
 
                   {Array.isArray(venue.hours) && venue.hours.length > 0 && (
@@ -899,14 +910,12 @@ export default function ItineraryScreen() {
                         <Text style={[
                           styles.timeBlockTime,
                           timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
-                          conflict.arrivalConflict && { color: "#922b21" },
                         ]}>
                           {timeBlocks[nonPendingIndex].arrivalTime.split(' ')[0]}
                         </Text>
                         <Text style={[
                           styles.timeBlockAmPm,
                           timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
-                          conflict.arrivalConflict && { color: "#922b21" },
                         ]}>
                           {timeBlocks[nonPendingIndex].arrivalTime.split(' ')[1]}
                         </Text>
@@ -926,14 +935,12 @@ export default function ItineraryScreen() {
                         <Text style={[
                           styles.timeBlockTime,
                           timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
-                          conflict.departureConflict && { color: "#922b21" },
                         ]}>
                           {timeBlocks[nonPendingIndex].departureTime.split(' ')[0]}
                         </Text>
                         <Text style={[
                           styles.timeBlockAmPm,
                           timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
-                          conflict.departureConflict && { color: "#922b21" },
                         ]}>
                           {timeBlocks[nonPendingIndex].departureTime.split(' ')[1]}
                         </Text>

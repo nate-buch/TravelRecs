@@ -99,6 +99,8 @@ export const resolveDay = (travelDay: string): string => {
 export type HoursDisplay = {
   text: string;
   isOpen: boolean;
+  openTime?: string;
+  closeTime?: string;
 };
 
 export const getHoursForDay = (
@@ -118,7 +120,11 @@ export const getHoursForDay = (
   if (!hoursStr || hoursStr === "Closed")
     return { text: "Closed", isOpen: false };
 
-  return { text: hoursStr, isOpen: true };
+  const parts = hoursStr.split(/\s[\u2013\u2014\-]\s/);
+  const openTime = parts[0] ?? undefined;
+  const closeTime = parts[1] ?? undefined;
+
+  return { text: hoursStr, isOpen: true, openTime, closeTime };
 };
 
 export const getDayBar = (hours: string[]): DayBar[] => {
@@ -196,8 +202,8 @@ export const getScheduleConflict = (
   const arrival = parseScheduleTime(arrivalTime);
   const departure = parseScheduleTime(departureTime);
 
-  const arrivalConflict = arrival < openTime || arrival >= closeTime;
-  const departureConflict = departure > closeTime || departure <= openTime;
+  const arrivalConflict = arrival < openTime;
+  const departureConflict = departure > closeTime;
   const hoursConflict = arrivalConflict || departureConflict;
 
   return { arrivalConflict, departureConflict, hoursConflict };
