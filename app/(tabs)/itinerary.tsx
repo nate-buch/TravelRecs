@@ -45,7 +45,7 @@ export default function ItineraryScreen() {
   const {
     venues, time, pace, budget, notes, routeLegs,
     setVenues, setRouteLegs, setTimeBlocks, setItinerary,
-    location, timeBlocks, legModes, setLegModes,
+    routeOrigin, timeBlocks, legModes, setLegModes,
     addRemovedVenueName, travelDay,
   } = useAppStore();
 
@@ -105,9 +105,9 @@ export default function ItineraryScreen() {
 
     setVenues(newVenues);
 
-    if (location && nonPending.length > 0) {
+    if (routeOrigin && nonPending.length > 0) {
       const legs = await getRouteLegs(
-        [location.longitude, location.latitude],
+        [routeOrigin.longitude, routeOrigin.latitude],
         nonPending
       );
       
@@ -116,7 +116,7 @@ export default function ItineraryScreen() {
       const modes = legs.map((leg, i) => newLegModes[i] ?? getDefaultMode(leg, pace));
       setLegModes(modes);
 
-      const blocks = recalculateSchedule(nonPending, legs, newTimeBlocks, nonPending, newLegModes);
+      const blocks = recalculateSchedule(nonPending, legs, newTimeBlocks, nonPending, newLegModes, travelDay);
       setTimeBlocks(blocks);
     } else {
       setRouteLegs([]);
@@ -641,15 +641,15 @@ export default function ItineraryScreen() {
 
         const nonPending = updated.filter(v => !v.pending);
 
-        if (location && nonPending.length > 0) {
+        if (routeOrigin && nonPending.length > 0) {
 
           const legs = await getRouteLegs(
-            [location.longitude, location.latitude],
+            [routeOrigin.longitude, routeOrigin.latitude],
             nonPending
           );
           const newModes = legs.map((leg) => getDefaultMode(leg, pace));
           const previousNonPending = venues.filter(v => !v.pending);
-          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, previousNonPending, newModes);
+          const blocks = recalculateSchedule(nonPending, legs, timeBlocks, previousNonPending, newModes, travelDay);
           setItinerary(updated, legs, newModes, blocks);
         } else {
           setVenues(updated);
@@ -877,7 +877,7 @@ export default function ItineraryScreen() {
                     <TouchableOpacity 
                       onPress={(e) => {
                         e.stopPropagation(); 
-                        toggleLock(index); 
+                        toggleLock(nonPendingIndex); 
                       }}
                       style={styles.lockButton}>
                       <View style={[styles.lockCircle, timeBlocks[nonPendingIndex].locked && styles.lockCircleActive]}>
@@ -1150,7 +1150,7 @@ const styles = StyleSheet.create({
 
   // #endregion
 
-  // #region Venue Info
+  // #region Venue Card Info
 
   dragHandle: {
     fontSize: 24,
@@ -1191,6 +1191,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
+  // #region Venue Basic Info
+
   venueNameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1230,6 +1232,10 @@ const styles = StyleSheet.create({
     color: "#111",
   },
 
+  // #endregion
+
+  // #region Day Bar
+
   dayBarRow: {
     flexDirection: "row",
     gap: 2,
@@ -1267,6 +1273,8 @@ const styles = StyleSheet.create({
   dayBarClosed: {
     color: "#aaa",
   },
+
+  // #endregion
 
   removeButton: {
     flexDirection: "row",

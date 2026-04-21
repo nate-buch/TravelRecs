@@ -1,3 +1,5 @@
+// #region Google Places API Data Pull
+
 export type PlacesVenue = {
   name: string;
   latitude: number;
@@ -67,7 +69,9 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceHours | nul
   }
 };
 
-// #region Days and Hours Extraction
+// #endregion
+
+// #region Days and Hours Presentation
 
 export type DayBar = {
   day: string;      // "Mo", "Tu" etc

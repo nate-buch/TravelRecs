@@ -35,7 +35,8 @@ type AppStore = {
   // The user's GPS coordinates, obtained on app load. Used as the starting
   // point for route optimization and itinerary generation.
 
-  location: { latitude: number; longitude: number } | null;
+  gpsLocation: { latitude: number; longitude: number } | null;
+  routeOrigin: { latitude: number; longitude: number } | null;
 
   // ─── Active Itinerary ─────────────────────────────────────────────────────
   // The currently displayed itinerary. All four arrays are parallel:
@@ -59,8 +60,9 @@ type AppStore = {
 
   // Itinerary metadata
   setPreferences: (time: string, pace: string, budget: string, notes: string) => void;
-  setLocation: (location: { latitude: number; longitude: number } | null) => void;
-
+  setGpsLocation: (location: { latitude: number; longitude: number } | null) => void;
+  setRouteOrigin: (location: { latitude: number; longitude: number } | null) => void;
+  
   // Active itinerary
   setVenues: (venues: Venue[]) => void;
   setRouteLegs: (legs: RouteLeg[]) => void;
@@ -95,7 +97,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setTravelDay: (day) => set({ travelDay: day }),
 
   // ─── Device Location ─────────────────────────────────────────────────────
-  location: null,
+  gpsLocation: null,
+  routeOrigin: null,
 
   // ─── Active Itinerary ────────────────────────────────────────────────────
   venues: [],
@@ -110,7 +113,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // Itinerary metadata
   setPreferences: (time, pace, budget, notes) => set({ time, pace, budget, notes }),
-  setLocation: (location) => set({ location }),
+  setGpsLocation: (location) => set({ gpsLocation: location, routeOrigin: location }),
+  setRouteOrigin: (location) => set({ routeOrigin: location }),
 
   // Active itinerary
   setVenues: (venues) => set({ venues }),

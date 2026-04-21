@@ -87,10 +87,10 @@ export default function MapScreen() {
     time, pace, budget, notes,
     venues, setVenues,
     setRouteLegs, routeLegs,
-    setLocation: saveLocation,
+    setGpsLocation, routeOrigin, gpsLocation,
     setTimeBlocks, legModes, setLegModes, timeBlocks,
     addRemovedVenueName, clearRemovedVenueNames,
-    setItinerary,
+    setItinerary, travelDay,
   } = useAppStore();
 
   const insets = useSafeAreaInsets()
@@ -131,9 +131,16 @@ export default function MapScreen() {
         setLocationError("Location permission denied.");
         return;
       }
+      await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+        (loc) => {
+          setGpsLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          setCameraCenter(prev => prev ?? [loc.coords.longitude, loc.coords.latitude]);
+        }
+      );
       const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
-      saveLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+
+      setGpsLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       setCameraCenter([loc.coords.longitude, loc.coords.latitude]);
     })();
   }, []);
@@ -160,7 +167,7 @@ export default function MapScreen() {
       setRouteLegs(legs);
       const modes = legs.map(leg => getDefaultMode(leg, pace));
       setLegModes(modes);
-      const blocks = calculateSchedule(optimized, legs, pace);
+      const blocks = calculateSchedule(optimized, legs, pace, modes, travelDay);
       setTimeBlocks(blocks);
       if (result.length > 0) {
         const lngs = [...result.map(v => v.longitude), coords.longitude];
@@ -183,12 +190,12 @@ export default function MapScreen() {
   // #region Route Generation: Auto 
 
   const handleAuto = async () => {
-    if (!location) return;
+    if (!routeOrigin) return;
     clearRemovedVenueNames();
     generateSheetRef.current?.collapse();
     await runGeneration({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
+      latitude: routeOrigin.latitude,
+      longitude: routeOrigin.longitude,
     });
   };
 
@@ -197,13 +204,13 @@ export default function MapScreen() {
   // #region Route Generation: Semi-Auto (stub — full logic in future sprint)
 
   const handleSemiAuto = async () => {
-    if (!location || venues.length === 0) return;
+    if (!routeOrigin || venues.length === 0) return;
     generateSheetRef.current?.collapse();
     // TODO: full Re-Generate implementation
     // passes locked venues, added venues, removed venues, venue type prefs to Claude
     await runGeneration({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
+      latitude: routeOrigin.latitude,
+      longitude: routeOrigin.longitude,
     });
   };
 
@@ -212,7 +219,7 @@ export default function MapScreen() {
   // #region Route Generation: Manual
 
   const handleManual = async () => {
-    if (!location || venues.length === 0) return;
+    if (!routeOrigin || venues.length === 0) return;
     generateSheetRef.current?.collapse();
     setLoading(true);
     setError("");
@@ -221,16 +228,16 @@ export default function MapScreen() {
       const allUserVenues = venues.map(v => ({ ...v, pending: false }));
       const previousNonPending = venues.filter(v => !v.pending);
       const optimized = optimizeRouteFromUser(
-        location.coords.latitude,
-        location.coords.longitude,
+        routeOrigin.latitude,
+        routeOrigin.longitude,
         allUserVenues
       );
       const legs = await getRouteLegs(
-        [location.coords.longitude, location.coords.latitude],
+        [routeOrigin.longitude, routeOrigin.latitude],
         optimized
       );
       const modes = legs.map(leg => getDefaultMode(leg, pace));
-      const blocks = recalculateSchedule(optimized, legs, timeBlocks, previousNonPending, modes);
+      const blocks = recalculateSchedule(optimized, legs, timeBlocks, previousNonPending, modes, travelDay);
       setItinerary(optimized, legs, modes, blocks);
       if (optimized.length > 0) {
         const lngs = [...optimized.map(v => v.longitude), location.coords.longitude];
@@ -285,30 +292,38 @@ export default function MapScreen() {
   };
 
   const removeVenueFromMap = async (venue: Venue) => {
-    const index = venues.findIndex(v => v.name === venue.name);
-    if (index === -1) return;
-    bottomSheetRef.current?.close();
-    addRemovedVenueName(venue.name);
-    const newVenues = venues.filter((_, i) => i !== index);
-    const newTimeBlocks = timeBlocks.filter((_, i) => i !== index);
-    const newLegModes = legModes.filter((_, i) => i !== index);
-    setVenues(newVenues);
-    if (location && newVenues.length > 0) {
-      const legs = await getRouteLegs(
-        [location?.coords.longitude ?? 0, location?.coords.latitude ?? 0],
-        newVenues
-      );
-      setRouteLegs(legs);
-      const modes = legs.map((leg, i) => newLegModes[i] ?? "walking");
-      setLegModes(modes);
-      const blocks = recalculateSchedule(newVenues, legs, newTimeBlocks, newVenues);
-      setTimeBlocks(blocks);
-    } else {
-      setRouteLegs([]);
-      setLegModes([]);
-      setTimeBlocks([]);
-    }
-  };
+      const index = venues.findIndex(v => v.name === venue.name);
+      if (index === -1) return;
+      bottomSheetRef.current?.close();
+      addRemovedVenueName(venue.name);
+      const previousVenues = venues.filter(v => !v.pending); // capture before removal
+      const newVenues = venues.filter((_, i) => i !== index);
+      const newTimeBlocks = timeBlocks.filter((_, i) => i !== index);
+      const newLegModes = legModes.filter((_, i) => i !== index);
+      setVenues(newVenues);
+      if (routeOrigin && newVenues.length > 0) {
+        const legs = await getRouteLegs(
+          [routeOrigin?.longitude ?? 0, routeOrigin?.latitude ?? 0],
+          newVenues
+        );
+        setRouteLegs(legs);
+        const modes = legs.map((leg, i) => newLegModes[i] ?? "walking");
+        setLegModes(modes);
+
+        console.log("newVenues", newVenues.length);
+        console.log("legs", legs.length);
+        console.log("newTimeBlocks", newTimeBlocks.length);
+        console.log("previousVenues", previousVenues.length);
+        console.log("newLegModes after modes remap", modes.length);
+
+        const blocks = recalculateSchedule(newVenues, legs, newTimeBlocks, previousVenues, newLegModes);
+        setTimeBlocks(blocks);
+      } else {
+        setRouteLegs([]);
+        setLegModes([]);
+        setTimeBlocks([]);
+      }
+    };
 
   // #endregion
 
@@ -356,17 +371,17 @@ export default function MapScreen() {
         ref={cameraRef}
         zoomLevel={14}
         centerCoordinate={
-          location
-            ? [location.coords.longitude, location.coords.latitude]
+          gpsLocation
+            ? [gpsLocation.longitude, gpsLocation.latitude]
             : [-97.7431, 30.2672]
         }
       />
 
     {/* #region User Location */}
 
-      {location && (
+      {gpsLocation && (
         <MapboxGL.MarkerView
-          coordinate={[location.coords.longitude, location.coords.latitude]}
+          coordinate={[gpsLocation.longitude, gpsLocation.latitude]}
           anchor={{ x: 0.5, y: 0.5 }}
         >
           <View style={styles.userMarker}>
@@ -641,7 +656,7 @@ export default function MapScreen() {
 
     </MapboxGL.MapView>
 
-    {!loading && venues.length === 0 && location && time && pace && budget && (
+    {!loading && venues.length === 0 && routeOrigin && time && pace && budget && (
       <View style={styles.emptyState}>
         <Text style={styles.emptyStateText}>
           To get started, tap Generate Itinerary below or add venues above!
@@ -654,7 +669,7 @@ export default function MapScreen() {
 
     <View style={styles.overlayContainer}>
 
-      {!location && !locationError && (
+      {!gpsLocation && !locationError && (
         <View style={styles.gpsLoading}>
           <Text style={styles.gpsLoadingText}>📍 Getting your location...</Text>
         </View>
@@ -675,7 +690,7 @@ export default function MapScreen() {
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {!loading && venues.length === 0 && location && time && pace && budget && (
+      {!loading && venues.length === 0 && routeOrigin && time && pace && budget && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
             To get started, tap Generate Itinerary below or add venues above!
@@ -713,9 +728,9 @@ export default function MapScreen() {
 
         {/* AUTO */}
         <TouchableOpacity
-          style={[styles.generateOption, (!location || loading) && styles.generateOptionDisabled]}
+          style={[styles.generateOption, (!routeOrigin || loading) && styles.generateOptionDisabled]}
           onPress={handleAuto}
-          disabled={!location || loading}
+          disabled={!routeOrigin || loading}
         >
           <View style={styles.generateOptionLeft}>
             <Text style={styles.generateOptionTitle}>AUTO</Text>
@@ -728,9 +743,9 @@ export default function MapScreen() {
 
         {/* SEMI-AUTO */}
         <TouchableOpacity
-          style={[styles.generateOption, (!location || loading || venues.length === 0) && styles.generateOptionDisabled]}
+          style={[styles.generateOption, (!routeOrigin || loading || venues.length === 0) && styles.generateOptionDisabled]}
           onPress={handleSemiAuto}
-          disabled={!location || loading || venues.length === 0}
+          disabled={!routeOrigin || loading || venues.length === 0}
         >
           <View style={styles.generateOptionLeft}>
             <Text style={styles.generateOptionTitle}>SEMI-AUTO</Text>
@@ -743,9 +758,9 @@ export default function MapScreen() {
 
         {/* MANUAL */}
         <TouchableOpacity
-          style={[styles.generateOption, (!location || loading || venues.length === 0) && styles.generateOptionDisabled]}
+          style={[styles.generateOption, (!routeOrigin || loading || venues.length === 0) && styles.generateOptionDisabled]}
           onPress={handleManual}
-          disabled={!location || loading || venues.length === 0}
+          disabled={!routeOrigin || loading || venues.length === 0}
         >
           <View style={styles.generateOptionLeft}>
             <Text style={styles.generateOptionTitle}>MANUAL</Text>

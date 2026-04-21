@@ -40,15 +40,23 @@ export const calculateSchedule = (
   venues: Venue[],
   routeLegs: RouteLeg[],
   pace: string,
-  legModes?: ("walking" | "driving")[]
+  legModes?: ("walking" | "driving")[],
+  travelDay?: string
 ): TimeBlock[] => {
   const now = new Date();
-  // Round current time to nearest 15 min
-  const roundedMinutes = roundToQuarter(now.getMinutes());
-  now.setMinutes(roundedMinutes, 0, 0);
+  const isToday = !travelDay || travelDay === "today";
+  let startTime: Date;
+  if (isToday) {
+    const roundedMinutes = roundToQuarter(now.getMinutes());
+    now.setMinutes(roundedMinutes, 0, 0);
+    startTime = now;
+  } else {
+    startTime = new Date(now);
+    startTime.setHours(7, 0, 0, 0);
+  }
 
   const blocks: TimeBlock[] = [];
-  let cursor = new Date(now);
+  let cursor = new Date(startTime);
 
   for (let i = 0; i < venues.length; i++) {
     const leg = routeLegs[i];
@@ -95,14 +103,23 @@ export const recalculateSchedule = (
   routeLegs: RouteLeg[],
   existingBlocks: TimeBlock[],
   existingVenues: Venue[],
-  legModes?: ("walking" | "driving")[]
+  legModes?: ("walking" | "driving")[],
+  travelDay?: string
 ): TimeBlock[] => {
   const now = new Date();
-  const roundedMinutes = roundToQuarter(now.getMinutes());
-  now.setMinutes(roundedMinutes, 0, 0);
+  const isToday = !travelDay || travelDay === "today";
+  let startTime: Date;
+  if (isToday) {
+    const roundedMinutes = roundToQuarter(now.getMinutes());
+    now.setMinutes(roundedMinutes, 0, 0);
+    startTime = now;
+  } else {
+    startTime = new Date(now);
+    startTime.setHours(7, 0, 0, 0);
+  }
 
   const blocks: TimeBlock[] = [];
-  let cursor = new Date(now);
+  let cursor = new Date(startTime);
 
   for (let i = 0; i < venues.length; i++) {
     const leg = routeLegs[i];
