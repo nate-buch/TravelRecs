@@ -12,9 +12,10 @@ import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration, formatTime, roundToQuarter } from "../config/durations";
-import { getDayBar, getHoursForDay, getPlaceDetails } from "../config/places";
+import { getHoursForDay, getDayBar, getPlaceDetails, getScheduleConflict } from "../config/places";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+
 
 // #endregion
 
@@ -689,7 +690,11 @@ export default function ItineraryScreen() {
                 </View>
                 <View style={styles.venueContent}>
                   <Text style={styles.pendingVenueName}>{venue.name}</Text>
-                  <Text style={styles.venueAddress}>{venue.address}</Text>
+                  
+                  <Text style={styles.venueAddress}>
+                    {venue.address?.replace(/, USA$/, "").replace(/, United States$/, "")}
+                  </Text>
+
                   <Text style={styles.pendingHint}>
                     Long-press and drag into position to add to your route!
                   </Text>
@@ -726,8 +731,17 @@ export default function ItineraryScreen() {
           .findIndex(v => v.name === venue.name);
         const leg = routeLegs[nonPendingIndex];
         const hoursDisplay = Array.isArray(venue.hours)
-  ? getHoursForDay(venue.hours, travelDay)
-  : { text: typeof venue.hours === 'string' ? venue.hours : "Verify before visiting", isOpen: true };
+          ? getHoursForDay(venue.hours, travelDay)
+          : { text: typeof venue.hours === 'string' ? venue.hours : "Verify before visiting", isOpen: true };
+
+        const conflict = nonPendingIndex >= 0 && timeBlocks[nonPendingIndex]
+          ? getScheduleConflict(
+              timeBlocks[nonPendingIndex].arrivalTime,
+              timeBlocks[nonPendingIndex].departureTime,
+              Array.isArray(venue.hours) ? venue.hours : [],
+              travelDay
+            )
+          : { arrivalConflict: false, departureConflict: false, hoursConflict: false };
 
         return (
           <ScaleDecorator>
@@ -801,11 +815,14 @@ export default function ItineraryScreen() {
                     <Text style={styles.venueName}>{venue.name}</Text>
                   </View>           
                   
-                  <Text style={styles.venueAddress}>{venue.address}</Text>
+                  <Text style={styles.venueAddress}>
+                    {venue.address?.replace(/, USA$/, "").replace(/, United States$/, "")}
+                  </Text>
+                  
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   
-                  <Text style={[styles.venueHours, !hoursDisplay.isOpen && { color: "#922b21", fontWeight: "800" }]}>
-                    Hours: {hoursDisplay.text}
+                  <Text style={[styles.venueHours, !hoursDisplay.isOpen && { color: "#922b21", fontWeight: "700" }]}>
+                    Hours: {hoursDisplay.text}{conflict.hoursConflict ? <Text style={{ color: "#922b21", fontWeight: "900", fontSize: 13 }}> (!)</Text> : null}
                   </Text>
 
                   {Array.isArray(venue.hours) && venue.hours.length > 0 && (
@@ -879,10 +896,18 @@ export default function ItineraryScreen() {
                         <Text style={styles.timeChevron}>◀</Text>
                       </TouchableOpacity>
                       <View style={{ alignItems: "center", width: 44 }}>
-                        <Text style={[styles.timeBlockTime, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                        <Text style={[
+                          styles.timeBlockTime,
+                          timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
+                          conflict.arrivalConflict && { color: "#922b21" },
+                        ]}>
                           {timeBlocks[nonPendingIndex].arrivalTime.split(' ')[0]}
                         </Text>
-                        <Text style={[styles.timeBlockAmPm, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                        <Text style={[
+                          styles.timeBlockAmPm,
+                          timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
+                          conflict.arrivalConflict && { color: "#922b21" },
+                        ]}>
                           {timeBlocks[nonPendingIndex].arrivalTime.split(' ')[1]}
                         </Text>
                       </View>
@@ -898,10 +923,18 @@ export default function ItineraryScreen() {
                         <Text style={styles.timeChevron}>◀</Text>
                       </TouchableOpacity>
                       <View style={{ alignItems: "center", width: 44 }}>
-                        <Text style={[styles.timeBlockTime, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                        <Text style={[
+                          styles.timeBlockTime,
+                          timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
+                          conflict.departureConflict && { color: "#922b21" },
+                        ]}>
                           {timeBlocks[nonPendingIndex].departureTime.split(' ')[0]}
                         </Text>
-                        <Text style={[styles.timeBlockAmPm, timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked]}>
+                        <Text style={[
+                          styles.timeBlockAmPm,
+                          timeBlocks[nonPendingIndex].locked && styles.timeBlockTimeLocked,
+                          conflict.departureConflict && { color: "#922b21" },
+                        ]}>
                           {timeBlocks[nonPendingIndex].departureTime.split(' ')[1]}
                         </Text>
                       </View>

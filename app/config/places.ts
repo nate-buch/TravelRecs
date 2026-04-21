@@ -115,7 +115,11 @@ export const getHoursForDay = (
     return { text: "Closed", isOpen: false };
   
   if (travelDay === "today") {
-    const [openStr, closeStr] = hoursStr.split(" – ");
+
+    const parts = hoursStr.split(/\s[\u2013\u2014\-]\s/);
+    if (parts.length < 2) return { text: hoursStr, isOpen: true };
+    const [openStr, closeStr] = parts;
+
     if (!closeStr) return { text: hoursStr, isOpen: true };
     return { text: `Open ${openStr} – ${closeStr}`, isOpen: true };
   }
@@ -132,6 +136,78 @@ export const getDayBar = (hours: string[]): DayBar[] => {
     const isOpen = entry ? !entry.includes("Closed") : false;
     return { day, isOpen };
   });
+};
+
+// #endregion
+
+// #region Conflict Detection
+
+export type ScheduleConflict = {
+  arrivalConflict: boolean;
+  departureConflict: boolean;
+  hoursConflict: boolean;
+};
+
+export const getScheduleConflict = (
+
+  arrivalTime: string,
+  departureTime: string,
+  hours: string[],
+  travelDay: string
+): ScheduleConflict => {
+  const none = { arrivalConflict: false, departureConflict: false, hoursConflict: false };
+  
+  if (!hours || !Array.isArray(hours) || hours.length === 0) return none;
+  
+  const dayName = resolveDay(travelDay);
+
+  const entry = hours.find(h => h.startsWith(dayName));
+  if (!entry) return none;
+  
+  const hoursStr = entry.split(": ").slice(1).join(": ");
+  if (!hoursStr || hoursStr === "Closed") return none;
+
+  const parts = hoursStr.split(/\s[\u2013\u2014\-]\s/);
+  if (parts.length < 2) return none;
+  const [openStr, closeStr] = parts;
+
+  if (!openStr || !closeStr) return none;
+
+  const parseHoursTime = (timeStr: string): Date => {
+    const [time, ampm] = timeStr.trim().split(/\s+/);
+    const [hours, minutes] = time.split(":").map(Number);
+    const date = new Date(2000, 0, 1);
+    let h = hours;
+    if (ampm === "AM" && hours === 12) h = 0;
+    else if (ampm === "PM" && hours !== 12) h = hours + 12;
+    if (h < 4) date.setDate(2);
+    date.setHours(h, minutes, 0, 0);
+    return date;
+  };
+
+  const parseScheduleTime = (timeStr: string): Date => {
+    const [time, ampm] = timeStr.split(" ");
+    const [hours, minutes] = time.split(":").map(Number);
+    const date = new Date(2000, 0, 1);
+    let h = hours;
+    if (ampm === "AM" && hours === 12) h = 0;
+    else if (ampm === "PM" && hours !== 12) h = hours + 12;
+    if (h < 4) date.setDate(2);
+    date.setHours(h, minutes, 0, 0);
+    return date;
+  };
+  
+  const openTime = parseHoursTime(openStr);
+  const closeTime = parseHoursTime(closeStr);
+  const arrival = parseScheduleTime(arrivalTime);
+  const departure = parseScheduleTime(departureTime);
+
+  const arrivalConflict = arrival < openTime || arrival >= closeTime;
+  const departureConflict = departure > closeTime || departure <= openTime;
+  const hoursConflict = arrivalConflict || departureConflict;
+
+  return { arrivalConflict, departureConflict, hoursConflict };
+
 };
 
 // #endregion
