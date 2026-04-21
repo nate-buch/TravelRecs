@@ -1,6 +1,6 @@
 // #region Imports
 
-import { getPlaceDetails, PlaceHours, PlacesVenue } from "./places";
+import { filterAndMapPlaces, getPlaceDetails, PlaceHours, PlacesVenue } from "./places";
 
 // #endregion
 
@@ -32,7 +32,8 @@ export type Venue = {
     pace: string,
     budget: string,
     notes: string,
-    nearbyPlaces: PlacesVenue[]
+    nearbyPlaces: PlacesVenue[],
+    venuePreferences: Record<string, "love" | "hate" | "neutral">
   ): Promise<Venue[]> => {
 
   // #region Build Context
@@ -42,8 +43,9 @@ export type Venue = {
     minute: "2-digit",
     hour12: true,
   });
-  const placesList = nearbyPlaces
-    .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — Types: ${p.types.slice(0, 3).join(", ")} — Rating: ${p.rating ?? "N/A"} — Open now: ${p.openNow ?? "unknown"}`)
+  const filtered = filterAndMapPlaces(nearbyPlaces, venuePreferences);
+  const placesList = filtered
+    .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — Open now: ${p.openNow ?? "unknown"}`)
     .join("\n");
 
   // #endregion
@@ -92,7 +94,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   {
     "name": "Exact venue name from the list above",
     "justification": "One sentence tailored to their preferences and why NOW is a good time to visit",
-    "venueType": "one of: coffee_shop, restaurant, street_food, museum, bar, park_viewpoint, live_music, attraction_landmark, art_gallery, market, nightclub, brewery, cultural_heritage"
+    "venueType": "one of: coffee_shop, restaurant, street_food, museum, bar, park_viewpoint, live_music, performing_arts, attraction_landmark, art_gallery, market, nightclub, brewery, cultural_heritage"
   }
 ]`
   ;
@@ -134,7 +136,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
     
     const venues = await Promise.all(parsed.map(async item => {
       const match = nearbyPlaces.find(p => p.name === item.name);
-      
+
       // Fetch live hours from Google Places if we have a placeId
       const placeHours = match?.placeId 
         ? await getPlaceDetails(match.placeId)

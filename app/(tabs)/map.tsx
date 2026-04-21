@@ -85,7 +85,7 @@ export default function MapScreen() {
 
   const {
     time, pace, budget, notes,
-    venues, setVenues,
+    venues, setVenues, venuePreferences,
     setRouteLegs, routeLegs,
     setGpsLocation, routeOrigin, gpsLocation,
     setTimeBlocks, legModes, setLegModes, timeBlocks,
@@ -159,7 +159,7 @@ export default function MapScreen() {
       const result = await generateItinerary(
         coords.latitude, coords.longitude,
         time || "a full day", pace || "well-paced", budget || "flexible",
-        notes, nearbyPlaces
+        notes, nearbyPlaces, venuePreferences
       );
       const optimized = optimizeRoute(coords.latitude, coords.longitude, result);
       setVenues(optimized);
@@ -309,12 +309,6 @@ export default function MapScreen() {
         setRouteLegs(legs);
         const modes = legs.map((leg, i) => newLegModes[i] ?? "walking");
         setLegModes(modes);
-
-        console.log("newVenues", newVenues.length);
-        console.log("legs", legs.length);
-        console.log("newTimeBlocks", newTimeBlocks.length);
-        console.log("previousVenues", previousVenues.length);
-        console.log("newLegModes after modes remap", modes.length);
 
         const blocks = recalculateSchedule(newVenues, legs, newTimeBlocks, previousVenues, newLegModes);
         setTimeBlocks(blocks);

@@ -5,6 +5,7 @@ export type VenueType =
   | "bar"
   | "park_viewpoint"
   | "live_music"
+  | "performing_arts"
   | "attraction_landmark"
   | "art_gallery"
   | "market"
@@ -22,6 +23,7 @@ const DURATIONS: Record<VenueType, Record<Pace, number>> = {
   bar:                 { fast: 30,  medium: 45,  slow: 60  },
   park_viewpoint:      { fast: 15,  medium: 30,  slow: 45  },
   live_music:          { fast: 90,  medium: 120, slow: 150 },
+  performing_arts:     { fast: 60,  medium: 90,  slow: 120 },
   attraction_landmark: { fast: 15,  medium: 15,  slow: 30  },
   art_gallery:         { fast: 30,  medium: 45,  slow: 60  },
   market:              { fast: 30,  medium: 30,  slow: 45  },

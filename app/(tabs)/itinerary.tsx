@@ -730,15 +730,13 @@ export default function ItineraryScreen() {
           .filter(v => !v.pending)
           .findIndex(v => v.name === venue.name);
         const leg = routeLegs[nonPendingIndex];
-        const hoursDisplay = Array.isArray(venue.hours)
-          ? getHoursForDay(venue.hours, travelDay)
-          : { text: typeof venue.hours === 'string' ? venue.hours : "Verify before visiting", isOpen: true };
+        const hoursDisplay = getHoursForDay(venue.placeHours ?? null, travelDay);
 
         const conflict = nonPendingIndex >= 0 && timeBlocks[nonPendingIndex]
           ? getScheduleConflict(
               timeBlocks[nonPendingIndex].arrivalTime,
               timeBlocks[nonPendingIndex].departureTime,
-              Array.isArray(venue.hours) ? venue.hours : [],
+              venue.placeHours ?? null,
               travelDay
             )
           : { arrivalConflict: false, departureConflict: false, hoursConflict: false };
@@ -825,7 +823,7 @@ export default function ItineraryScreen() {
                     {"Hours: "}
                     {hoursDisplay.openTime ?? hoursDisplay.text}
                     {conflict.arrivalConflict && hoursDisplay.openTime
-                      ? <Ionicons name="alert-circle-outline" size={14} color="#922b21" />
+                      ? <><Text>{"\u200A"}</Text><Ionicons name="alert-circle-outline" size={14} color="#922b21" /></>
                       : null}
                     {hoursDisplay.openTime && hoursDisplay.closeTime
                       ? <Text>{" \u2013 "}</Text>

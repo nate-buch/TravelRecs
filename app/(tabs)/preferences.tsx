@@ -37,20 +37,29 @@ type HorizontalOptionProps = {
   onSelect: (id: string) => void;
 };
 
-const VENUE_TYPES: { id: string; label: string }[] = [
-  { id: "coffee_shop",         label: "Coffee & Cafes"     },
-  { id: "restaurant",          label: "Restaurants"        },
-  { id: "street_food",         label: "Street Food"        },
-  { id: "museum",              label: "Museums"            },
-  { id: "bar",                 label: "Bars"               },
-  { id: "park_viewpoint",      label: "Parks & Viewpoints" },
-  { id: "live_music",          label: "Live Music"         },
-  { id: "attraction_landmark", label: "Landmarks"          },
-  { id: "art_gallery",         label: "Art Galleries"      },
-  { id: "market",              label: "Markets"            },
-  { id: "nightclub",           label: "Nightlife"          },
-  { id: "brewery",             label: "Breweries"          },
-  { id: "cultural_heritage",   label: "Cultural Sites"     },
+const VENUE_TYPE_GROUPS: { id: string; label: string }[][] = [
+  [
+    { id: "coffee_shop",         label: "Coffee & Cafes"     },
+    { id: "restaurant",          label: "Restaurants"        },
+    { id: "street_food",         label: "Street Food"        },
+    { id: "bar",                 label: "Bars"               },
+    { id: "brewery",             label: "Breweries"          },
+  ],
+  [
+    { id: "cultural_heritage",   label: "Cultural Sites"     },
+    { id: "attraction_landmark", label: "Landmarks"          },
+    { id: "museum",              label: "Museums"            },
+    { id: "performing_arts",     label: "Performing Arts"    },
+    { id: "art_gallery",         label: "Art Galleries"      },
+  ],
+  [
+    { id: "live_music",          label: "Live Music"         },
+    { id: "nightclub",           label: "Nightlife"          },
+  ],
+  [
+    { id: "market",              label: "Markets"            },
+    { id: "park_viewpoint",      label: "Parks & Viewpoints" },
+  ],
 ];
 
 // #endregion
@@ -175,26 +184,33 @@ export default function PreferencesScreen() {
           </Text>
 
           <View style={styles.venueTypeGrid}>
-            {VENUE_TYPES.map((vt) => {
-              const state = venuePreferences[vt.id] ?? "neutral";
-              return (
-                <TouchableOpacity
-                  key={vt.id}
-                  style={styles.venueTypeRow}
-                  onPress={() => cycleVenuePreference(vt.id)}
-                >
-                  <View style={[
-                    styles.venueTypeCircle,
-                    state === "love" && styles.venueTypeCircleLove,
-                    state === "hate" && styles.venueTypeCircleHate,
-                  ]}>
-                    {state === "love" && <Ionicons name="heart" size={16} color="#fff" />}
-                    {state === "hate" && <Ionicons name="remove-circle" size={18} color="#fff" />}
-                  </View>
-                  <Text style={styles.venueTypeLabel}>{vt.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            {VENUE_TYPE_GROUPS.map((group, groupIndex) => (
+              <View key={groupIndex} style={[
+                styles.venueTypeGroup,
+                groupIndex < VENUE_TYPE_GROUPS.length - 1 && styles.venueTypeGroupGap,
+              ]}>
+                {group.map((vt) => {
+                  const state = venuePreferences[vt.id] ?? "neutral";
+                  return (
+                    <TouchableOpacity
+                      key={vt.id}
+                      style={styles.venueTypeRow}
+                      onPress={() => cycleVenuePreference(vt.id)}
+                    >
+                      <View style={[
+                        styles.venueTypeCircle,
+                        state === "love" && styles.venueTypeCircleLove,
+                        state === "hate" && styles.venueTypeCircleHate,
+                      ]}>
+                        {state === "love" && <Ionicons name="heart" size={16} color="#fff" />}
+                        {state === "hate" && <Ionicons name="remove-circle" size={18} color="#fff" />}
+                      </View>
+                      <Text style={styles.venueTypeLabel}>{vt.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
           </View>
 
           <Text style={styles.sectionTitle}>
@@ -344,8 +360,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     width: "50%",
-    paddingVertical: 5,
+    paddingVertical: 4,
     gap: 6,
+  },
+  venueTypeGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: "100%",
+  },
+  venueTypeGroupGap: {
+    marginBottom: 12,
   },
   venueTypeCircle: {
     width: 22,

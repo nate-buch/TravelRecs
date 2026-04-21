@@ -7,6 +7,7 @@ export type PlacesVenue = {
   address: string;
   types: string[];
   rating?: number;
+  userRatingsTotal?: number;
   openNow?: boolean;
   placeId?: string;
 };
@@ -14,10 +15,8 @@ export type PlacesVenue = {
 export const getNearbyPlaces = async (
   latitude: number,
   longitude: number,
-  radius: number = 3000
 ): Promise<PlacesVenue[]> => {
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY}`;
-
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&rankby=distance&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY}`;
   const response = await fetch(url);
   const data = await response.json();
 
@@ -32,6 +31,7 @@ export const getNearbyPlaces = async (
     address: place.vicinity,
     types: place.types,
     rating: place.rating,
+    userRatingsTotal: place.user_ratings_total,
     openNow: place.opening_hours?.open_now,
     placeId: place.place_id,
   }));
@@ -71,6 +71,125 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceHours | nul
 
 // #endregion
 
+// #region Venue Type Mapping and Filtering
+
+import { VenueType } from "./durations";
+
+const GOOGLE_TYPE_TO_VENUE_TYPE: Partial<Record<string, VenueType>> = {
+  // Coffee & Cafes
+  "cafe":                    "coffee_shop",
+  "bakery":                  "coffee_shop",
+
+  // Restaurants
+  "restaurant":              "restaurant",
+  "meal_takeaway":           "street_food",
+
+  // Museums
+  "museum":                  "museum",
+
+  // Bars
+  "bar":                     "bar",
+
+  // Parks & Viewpoints
+  "park":                    "park_viewpoint",
+  "natural_feature":         "park_viewpoint",
+
+  // Live Music
+  // (live music venues surface via tourist_attraction/point_of_interest)
+
+  // Performing Arts
+  "performing_arts_theater": "performing_arts",
+
+  // Attractions & Landmarks
+  "tourist_attraction":      "attraction_landmark",
+  "point_of_interest":       "attraction_landmark",
+  "amusement_park":          "attraction_landmark",
+  "stadium":                 "attraction_landmark",
+
+  // Art Galleries
+  "art_gallery":             "art_gallery",
+
+  // Nightlife
+  "night_club":              "nightclub",
+
+  // Cultural Heritage
+  "church":                  "cultural_heritage",
+  "hindu_temple":            "cultural_heritage",
+  "mosque":                  "cultural_heritage",
+  "synagogue":               "cultural_heritage",
+  "cemetery":                "cultural_heritage",
+  "library":                 "cultural_heritage",
+};
+
+const RELIGIOUS_TYPES = new Set([
+  "church", "hindu_temple", "mosque", "synagogue", "cemetery"
+]);
+
+const MIN_REVIEWS: Partial<Record<VenueType, number>> = {
+  coffee_shop:         10,
+  restaurant:          10,
+  street_food:         10,
+  bar:                 10,
+  brewery:             10,
+  nightclub:           10,
+  live_music:          10,
+  museum:              100,
+  park_viewpoint:      100,
+  attraction_landmark: 100,
+  art_gallery:         100,
+  market:              100,
+  cultural_heritage:   100,
+  performing_arts:     100,
+};
+
+export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
+  const typeSet = new Set(types);
+
+  // Religious places require tourist_attraction or point_of_interest co-tag
+  const hasReligiousType = types.some(t => RELIGIOUS_TYPES.has(t));
+  if (hasReligiousType) {
+    if (!typeSet.has("tourist_attraction") && !typeSet.has("point_of_interest")) return null;
+    return "cultural_heritage";
+  }
+
+  // Find the first matching Google type in priority order
+  for (const type of types) {
+    const venueType = GOOGLE_TYPE_TO_VENUE_TYPE[type];
+    if (venueType) return venueType;
+  }
+
+  return null;
+};
+
+export const filterAndMapPlaces = (
+  places: PlacesVenue[],
+  venuePreferences: Record<string, "love" | "hate" | "neutral">
+): (PlacesVenue & { venueType: VenueType })[] => {
+  const results: (PlacesVenue & { venueType: VenueType })[] = [];
+
+  for (const place of places) {
+    // Map to our venue type
+    const venueType = getVenueTypeForPlace(place.types);
+    if (!venueType) continue;
+
+    // Skip hated venue types
+    if (venuePreferences[venueType] === "hate") continue;
+
+    // Rating filter
+    if (!place.rating || place.rating < 4.0) continue;
+
+    // Review count filter
+    const minReviews = MIN_REVIEWS[venueType] ?? 10;
+    if (!place.userRatingsTotal || place.userRatingsTotal < minReviews) continue;
+
+    results.push({ ...place, venueType });
+  }
+
+  return results;
+};
+
+// #endregion
+
 // #region Days and Hours Presentation
 
 export type DayBar = {
@@ -103,28 +222,47 @@ export type HoursDisplay = {
   closeTime?: string;
 };
 
+const formatHoursMins = (hhmm: string): string => {
+  const h = parseInt(hhmm.slice(0, 2));
+  const m = parseInt(hhmm.slice(2, 4));
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  const mins = m > 0 ? `:${m.toString().padStart(2, "0")}` : "";
+  return `${hour}${mins} ${ampm}`;
+};
+
 export const getHoursForDay = (
-  hours: string[],
+  placeHours: PlaceHours | null,
   travelDay: string
 ): HoursDisplay => {
-  if (!hours || !Array.isArray(hours) || hours.length === 0)
-    return { text: "Verify before visiting", isOpen: true };
+  if (!placeHours) return { text: "Verify before visiting", isOpen: true };
 
   const dayName = resolveDay(travelDay);
-  const entry = hours.find(h => h.startsWith(dayName));
+  const DAY_NAME_TO_INDEX: Record<string, number> = {
+    "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
+    "Thursday": 4, "Friday": 5, "Saturday": 6,
+  };
+  const dayIndex = DAY_NAME_TO_INDEX[dayName];
 
-  if (!entry) return { text: "Verify before visiting", isOpen: true };
+  // Check weekdayText for Closed
+  const entry = placeHours.weekdayText.find(h => h.startsWith(dayName));
+  if (entry) {
+    const hoursStr = entry.split(": ").slice(1).join(": ");
+    if (hoursStr === "Closed") return { text: "Closed", isOpen: false };
+  }
 
-  const hoursStr = entry.split(": ").slice(1).join(": ");
+  const period = placeHours.periods.find(p => p.day === dayIndex);
+  if (!period) return { text: "Verify before visiting", isOpen: true };
 
-  if (!hoursStr || hoursStr === "Closed")
-    return { text: "Closed", isOpen: false };
+  const openTime = formatHoursMins(period.openTime);
+  const closeTime = formatHoursMins(period.closeTime);
 
-  const parts = hoursStr.split(/\s[\u2013\u2014\-]\s/);
-  const openTime = parts[0] ?? undefined;
-  const closeTime = parts[1] ?? undefined;
-
-  return { text: hoursStr, isOpen: true, openTime, closeTime };
+  return {
+    text: `${openTime} – ${closeTime}`,
+    isOpen: true,
+    openTime,
+    closeTime,
+  };
 };
 
 export const getDayBar = (hours: string[]): DayBar[] => {
@@ -149,39 +287,34 @@ export type ScheduleConflict = {
 };
 
 export const getScheduleConflict = (
-
   arrivalTime: string,
   departureTime: string,
-  hours: string[],
+  placeHours: PlaceHours | null,
   travelDay: string
 ): ScheduleConflict => {
   const none = { arrivalConflict: false, departureConflict: false, hoursConflict: false };
-  
-  if (!hours || !Array.isArray(hours) || hours.length === 0) return none;
-  
+
+  if (!placeHours || !placeHours.periods || placeHours.periods.length === 0) return none;
+
+  // Resolve travel day to a Google day index (0=Sunday)
   const dayName = resolveDay(travelDay);
+  const DAY_NAME_TO_INDEX: Record<string, number> = {
+    "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
+    "Thursday": 4, "Friday": 5, "Saturday": 6,
+  };
+  const dayIndex = DAY_NAME_TO_INDEX[dayName];
+  if (dayIndex === undefined) return none;
 
-  const entry = hours.find(h => h.startsWith(dayName));
-  if (!entry) return none;
-  
-  const hoursStr = entry.split(": ").slice(1).join(": ");
-  if (!hoursStr || hoursStr === "Closed") return none;
+  const period = placeHours.periods.find(p => p.day === dayIndex);
+  if (!period) return none;
 
-  const parts = hoursStr.split(/\s[\u2013\u2014\-]\s/);
-  if (parts.length < 2) return none;
-  const [openStr, closeStr] = parts;
-
-  if (!openStr || !closeStr) return none;
-
-  const parseHoursTime = (timeStr: string): Date => {
-    const [time, ampm] = timeStr.trim().split(/\s+/);
-    const [hours, minutes] = time.split(":").map(Number);
+  // Parse "HHMM" 24-hour string into a Date
+  const parsePeriodsTime = (hhmm: string): Date => {
+    const h = parseInt(hhmm.slice(0, 2));
+    const m = parseInt(hhmm.slice(2, 4));
     const date = new Date(2000, 0, 1);
-    let h = hours;
-    if (ampm === "AM" && hours === 12) h = 0;
-    else if (ampm === "PM" && hours !== 12) h = hours + 12;
-    if (h < 4) date.setDate(2);
-    date.setHours(h, minutes, 0, 0);
+    if (h < 4) date.setDate(2); // handle midnight crossover
+    date.setHours(h, m, 0, 0);
     return date;
   };
 
@@ -196,9 +329,9 @@ export const getScheduleConflict = (
     date.setHours(h, minutes, 0, 0);
     return date;
   };
-  
-  const openTime = parseHoursTime(openStr);
-  const closeTime = parseHoursTime(closeStr);
+
+  const openTime = parsePeriodsTime(period.openTime);
+  const closeTime = parsePeriodsTime(period.closeTime);
   const arrival = parseScheduleTime(arrivalTime);
   const departure = parseScheduleTime(departureTime);
 
@@ -207,7 +340,6 @@ export const getScheduleConflict = (
   const hoursConflict = arrivalConflict || departureConflict;
 
   return { arrivalConflict, departureConflict, hoursConflict };
-
 };
 
 // #endregion
