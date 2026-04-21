@@ -19,6 +19,8 @@ import { getNearbyPlaces } from "../config/places";
 import { optimizeRoute, optimizeRouteFromUser } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+import { getPlaceDetails } from "../config/places";
+import { generateJustification } from "../config/claude";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
@@ -250,21 +252,23 @@ export default function MapScreen() {
 
   // #region Add Venue via Search
 
-  const handleSearchSelect = (result: SearchResult) => {
+  const handleSearchSelect = async (result: SearchResult) => {
+    const placeHours = result.placeId ? await getPlaceDetails(result.placeId) : null;
     const venue: Venue = {
       name: result.name,
       latitude: result.latitude,
       longitude: result.longitude,
       address: result.address,
       justification: "",
-      hours: "Verify before visiting",
+      hours: placeHours?.weekdayText ?? [],
+      placeId: result.placeId,
+      placeHours: placeHours ?? undefined,
       types: result.types,
       venueType: undefined,
       locked: true,
       pending: true,
     };
     setVenues([venue, ...venues]);
-    cameraRef.current?.flyTo([result.longitude, result.latitude], 500);
   };
 
   // #endregion

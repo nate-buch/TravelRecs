@@ -164,3 +164,53 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
 
 };
 // #endregion
+
+// #region Generate Justification API Call
+
+export const generateJustification = async (
+  name: string,
+  address: string,
+  types: string[],
+  time: string,
+  pace: string,
+  budget: string,
+  notes: string,
+): Promise<string> => {
+  const prompt = `You are a knowledgeable local travel advisor. A traveler has chosen to visit this venue:
+
+Name: ${name}
+Address: ${address}
+Type: ${types.slice(0, 3).join(", ")}
+
+Their travel preferences:
+- Trip length: ${time || "a full day"}
+- Pace: ${pace || "well-paced"}
+- Budget: ${budget || "flexible"}
+- Notes: ${notes || "None"}
+
+Write exactly ONE enthusiastic sentence (max 20 words) explaining why this is a great choice given their preferences. Be specific to the venue. No generic phrases.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 100,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const data = await response.json();
+    if (data.type === "error") return "";
+    return data.content[0].text.trim();
+  } catch {
+    return "";
+  }
+};
+
+// #endregion

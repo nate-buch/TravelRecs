@@ -92,28 +92,35 @@ export const resolveDay = (travelDay: string): string => {
   return DAY_MAP[travelDay] ?? "";
 };
 
+export type HoursDisplay = {
+  text: string;
+  isOpen: boolean;
+};
+
 export const getHoursForDay = (
   hours: string[],
   travelDay: string
-): string => {
-  if (!hours || hours.length === 0) return "Verify before visiting";
+): HoursDisplay => {
+  if (!hours || !Array.isArray(hours) || hours.length === 0) 
+    return { text: "Verify before visiting", isOpen: true };
   
   const dayName = resolveDay(travelDay);
   const entry = hours.find(h => h.startsWith(dayName));
   
-  if (!entry) return "Verify before visiting";
+  if (!entry) return { text: "Verify before visiting", isOpen: true };
   
   const hoursStr = entry.split(": ").slice(1).join(": ");
   
-  if (!hoursStr || hoursStr === "Closed") return travelDay === "today" ? "Closed today" : "Closed";
+  if (!hoursStr || hoursStr === "Closed") 
+    return { text: "Closed", isOpen: false };
   
   if (travelDay === "today") {
     const [openStr, closeStr] = hoursStr.split(" – ");
-    if (!closeStr) return hoursStr;
-    return `Open ${openStr} – ${closeStr}`;
+    if (!closeStr) return { text: hoursStr, isOpen: true };
+    return { text: `Open ${openStr} – ${closeStr}`, isOpen: true };
   }
   
-  return hoursStr;
+  return { text: hoursStr, isOpen: true };
 };
 
 export const getDayBar = (hours: string[]): DayBar[] => {

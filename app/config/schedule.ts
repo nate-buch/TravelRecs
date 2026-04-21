@@ -109,8 +109,6 @@ export const recalculateSchedule = (
     const existingIndex = existingVenues.findIndex(v => v.name === venues[i].name); 
     const existingBlock = existingIndex >= 0 ? existingBlocks[existingIndex] : undefined;
 
-    console.log("recalc lookup:", venues[i].name, "existingIndex:", existingIndex, "locked:", existingBlock?.locked);
-
     const isLocked = existingBlock?.locked ?? false;
 
     if (isLocked && existingBlock) {

@@ -6,15 +6,15 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { DaySelector } from "../../components/DaySelector";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
 import { Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration, formatTime, roundToQuarter } from "../config/durations";
+import { getDayBar, getHoursForDay, getPlaceDetails } from "../config/places";
 import { recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
-import { getHoursForDay, getDayBar } from "../config/places";
-import { DaySelector } from "../../components/DaySelector";
 
 // #endregion
 
@@ -42,7 +42,7 @@ export default function ItineraryScreen() {
   // #region Store
   
   const {
-    venues, time, pace, budget, routeLegs,
+    venues, time, pace, budget, notes, routeLegs,
     setVenues, setRouteLegs, setTimeBlocks, setItinerary,
     location, timeBlocks, legModes, setLegModes,
     addRemovedVenueName, travelDay,
@@ -124,14 +124,17 @@ export default function ItineraryScreen() {
     }
   };
 
-  const handleSearchSelect = (result: SearchResult) => {
+  const handleSearchSelect = async (result: SearchResult) => {
+    const placeHours = result.placeId ? await getPlaceDetails(result.placeId) : null;
     const venue: Venue = {
       name: result.name,
       latitude: result.latitude,
       longitude: result.longitude,
       address: result.address,
       justification: "",
-      hours: "Verify before visiting",
+      hours: placeHours?.weekdayText ?? [],
+      placeId: result.placeId,
+      placeHours: placeHours ?? undefined,
       types: result.types,
       venueType: undefined,
       locked: true,
@@ -643,17 +646,8 @@ export default function ItineraryScreen() {
             [location.longitude, location.latitude],
             nonPending
           );
-
           const newModes = legs.map((leg) => getDefaultMode(leg, pace));
-
-          console.log("timeBlocks before recalc:", timeBlocks.map((b, i) => ({ 
-            venue: venues.filter(v => !v.pending)[i]?.name, 
-            locked: b.locked 
-          })));
-          console.log("nonPending after drag:", nonPending.map(v => v.name));
-          
           const previousNonPending = venues.filter(v => !v.pending);
-
           const blocks = recalculateSchedule(nonPending, legs, timeBlocks, previousNonPending, newModes);
           setItinerary(updated, legs, newModes, blocks);
         } else {
@@ -731,6 +725,9 @@ export default function ItineraryScreen() {
           .filter(v => !v.pending)
           .findIndex(v => v.name === venue.name);
         const leg = routeLegs[nonPendingIndex];
+        const hoursDisplay = Array.isArray(venue.hours)
+  ? getHoursForDay(venue.hours, travelDay)
+  : { text: typeof venue.hours === 'string' ? venue.hours : "Verify before visiting", isOpen: true };
 
         return (
           <ScaleDecorator>
@@ -807,8 +804,8 @@ export default function ItineraryScreen() {
                   <Text style={styles.venueAddress}>{venue.address}</Text>
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   
-                  <Text style={styles.venueHours}>
-                    Hours: {Array.isArray(venue.hours) ? getHoursForDay(venue.hours, travelDay) : venue.hours}
+                  <Text style={[styles.venueHours, !hoursDisplay.isOpen && { color: "#922b21", fontWeight: "800" }]}>
+                    Hours: {hoursDisplay.text}
                   </Text>
 
                   {Array.isArray(venue.hours) && venue.hours.length > 0 && (
@@ -1232,10 +1229,10 @@ const styles = StyleSheet.create({
     borderColor: "#999",
   },
   dayBarOpen: {
-    color: "#2d9e5f",
+    color: "#111",
   },
   dayBarClosed: {
-    color: "#c0392b",
+    color: "#aaa",
   },
 
   removeButton: {
@@ -1274,7 +1271,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     width: "90%",
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: "#e0e0e0",
