@@ -101,29 +101,19 @@ export const getHoursForDay = (
   hours: string[],
   travelDay: string
 ): HoursDisplay => {
-  if (!hours || !Array.isArray(hours) || hours.length === 0) 
+  if (!hours || !Array.isArray(hours) || hours.length === 0)
     return { text: "Verify before visiting", isOpen: true };
-  
+
   const dayName = resolveDay(travelDay);
   const entry = hours.find(h => h.startsWith(dayName));
-  
+
   if (!entry) return { text: "Verify before visiting", isOpen: true };
-  
+
   const hoursStr = entry.split(": ").slice(1).join(": ");
-  
-  if (!hoursStr || hoursStr === "Closed") 
+
+  if (!hoursStr || hoursStr === "Closed")
     return { text: "Closed", isOpen: false };
-  
-  if (travelDay === "today") {
 
-    const parts = hoursStr.split(/\s[\u2013\u2014\-]\s/);
-    if (parts.length < 2) return { text: hoursStr, isOpen: true };
-    const [openStr, closeStr] = parts;
-
-    if (!closeStr) return { text: hoursStr, isOpen: true };
-    return { text: `Open ${openStr} – ${closeStr}`, isOpen: true };
-  }
-  
   return { text: hoursStr, isOpen: true };
 };
 
