@@ -15,12 +15,10 @@ import { generateItinerary, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration } from "../config/durations";
-import { getNearbyPlaces } from "../config/places";
+import { getNearbyPlaces, getPlaceDetails } from "../config/places";
 import { optimizeRoute, optimizeRouteFromUser } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
-import { getPlaceDetails } from "../config/places";
-import { generateJustification } from "../config/claude";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
@@ -240,8 +238,8 @@ export default function MapScreen() {
       const blocks = recalculateSchedule(optimized, legs, timeBlocks, previousNonPending, modes, travelDay);
       setItinerary(optimized, legs, modes, blocks);
       if (optimized.length > 0) {
-        const lngs = [...optimized.map(v => v.longitude), location.coords.longitude];
-        const lats = [...optimized.map(v => v.latitude), location.coords.latitude];
+        const lngs = [...optimized.map(v => v.longitude), routeOrigin.longitude];
+        const lats = [...optimized.map(v => v.latitude), routeOrigin.latitude];
         cameraRef.current?.fitBounds(
           [Math.min(...lngs), Math.min(...lats)],
           [Math.max(...lngs), Math.max(...lats)],

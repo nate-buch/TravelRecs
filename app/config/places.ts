@@ -16,25 +16,40 @@ export const getNearbyPlaces = async (
   latitude: number,
   longitude: number,
 ): Promise<PlacesVenue[]> => {
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&rankby=distance&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY}`;
-  const response = await fetch(url);
-  const data = await response.json();
+  const fetchPage = async (pagetoken?: string): Promise<{ results: PlacesVenue[], nextToken?: string }> => {
+    const tokenParam = pagetoken ? `&pagetoken=${pagetoken}` : "";
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&rankby=distance${tokenParam}&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      throw new Error(`Places API error: ${data.status}`);
+    }
+    return {
+      results: data.results.map((place: any) => ({
+        name: place.name,
+        latitude: place.geometry.location.lat,
+        longitude: place.geometry.location.lng,
+        address: place.vicinity,
+        types: place.types,
+        rating: place.rating,
+        userRatingsTotal: place.user_ratings_total,
+        openNow: place.opening_hours?.open_now,
+        placeId: place.place_id,
+      })),
+      nextToken: data.next_page_token,
+    };
+  };
 
-  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-    throw new Error(`Places API error: ${data.status}`);
+  const page1 = await fetchPage();
+  let allResults = page1.results;
+
+  if (page1.nextToken) {
+    await new Promise(res => setTimeout(res, 2000));
+    const page2 = await fetchPage(page1.nextToken);
+    allResults = [...allResults, ...page2.results];
   }
 
-  return data.results.map((place: any) => ({
-    name: place.name,
-    latitude: place.geometry.location.lat,
-    longitude: place.geometry.location.lng,
-    address: place.vicinity,
-    types: place.types,
-    rating: place.rating,
-    userRatingsTotal: place.user_ratings_total,
-    openNow: place.opening_hours?.open_now,
-    placeId: place.place_id,
-  }));
+  return allResults;
 };
 
 export type PlaceHours = {
@@ -161,31 +176,59 @@ export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
   return null;
 };
 
+const haversineDistance = (
+  lat1: number, lng1: number,
+  lat2: number, lng2: number
+): number => {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 export const filterAndMapPlaces = (
   places: PlacesVenue[],
-  venuePreferences: Record<string, "love" | "hate" | "neutral">
+  venuePreferences: Record<string, "love" | "hate" | "neutral">,
+  userLat: number,
+  userLng: number,
 ): (PlacesVenue & { venueType: VenueType })[] => {
   const results: (PlacesVenue & { venueType: VenueType })[] = [];
+  
+  console.log("total incoming:", places.length)
+  let failedType = 0, failedHate = 0, failedRating = 0, failedReviews = 0;
 
   for (const place of places) {
-    // Map to our venue type
     const venueType = getVenueTypeForPlace(place.types);
-    if (!venueType) continue;
-
-    // Skip hated venue types
-    if (venuePreferences[venueType] === "hate") continue;
-
-    // Rating filter
-    if (!place.rating || place.rating < 4.0) continue;
-
-    // Review count filter
+    if (!venueType) { failedType++; continue; }
+    if (venuePreferences[venueType] === "hate") { failedHate++; continue; }
+    if (!place.rating || place.rating < 4.0) { failedRating++; continue; }
     const minReviews = MIN_REVIEWS[venueType] ?? 10;
-    if (!place.userRatingsTotal || place.userRatingsTotal < minReviews) continue;
-
+    if (!place.userRatingsTotal || place.userRatingsTotal < minReviews) { failedReviews++; continue; }
     results.push({ ...place, venueType });
   }
 
-  return results;
+  console.log(`filtered out — type:${failedType} hate:${failedHate} rating:${failedRating} reviews:${failedReviews} | passed:${results.length}`);
+
+  // Normalize distances
+  const distances = results.map(p => haversineDistance(userLat, userLng, p.latitude, p.longitude));
+  const maxDist = Math.max(...distances, 1);
+
+  // Score and sort
+  return results
+    .map((p, i) => {
+      const normalizedDist = distances[i] / maxDist;
+      const lovedBonus = venuePreferences[p.venueType] === "love" ? 1 : 0;
+      const score =
+        (p.rating! / 5.0) * 0.4 +
+        (1 - normalizedDist) * 0.3 +
+        lovedBonus * 0.3;
+      return { ...p, score };
+    })
+    .sort((a, b) => b.score - a.score);
 };
 
 // #endregion
@@ -216,10 +259,11 @@ export const resolveDay = (travelDay: string): string => {
 };
 
 export type HoursDisplay = {
-  text: string;
   isOpen: boolean;
-  openTime?: string;
-  closeTime?: string;
+  periods: {
+    openTime: string;
+    closeTime: string;
+  }[];
 };
 
 const formatHoursMins = (hhmm: string): string => {
@@ -235,7 +279,7 @@ export const getHoursForDay = (
   placeHours: PlaceHours | null,
   travelDay: string
 ): HoursDisplay => {
-  if (!placeHours) return { text: "Verify before visiting", isOpen: true };
+  if (!placeHours) return { isOpen: true, periods: [] };
 
   const dayName = resolveDay(travelDay);
   const DAY_NAME_TO_INDEX: Record<string, number> = {
@@ -244,24 +288,22 @@ export const getHoursForDay = (
   };
   const dayIndex = DAY_NAME_TO_INDEX[dayName];
 
-  // Check weekdayText for Closed
+  // Check for Closed via weekdayText
   const entry = placeHours.weekdayText.find(h => h.startsWith(dayName));
   if (entry) {
     const hoursStr = entry.split(": ").slice(1).join(": ");
-    if (hoursStr === "Closed") return { text: "Closed", isOpen: false };
+    if (hoursStr === "Closed") return { isOpen: false, periods: [] };
   }
 
-  const period = placeHours.periods.find(p => p.day === dayIndex);
-  if (!period) return { text: "Verify before visiting", isOpen: true };
-
-  const openTime = formatHoursMins(period.openTime);
-  const closeTime = formatHoursMins(period.closeTime);
+  const dayPeriods = placeHours.periods.filter(p => p.day === dayIndex);
+  if (dayPeriods.length === 0) return { isOpen: true, periods: [] };
 
   return {
-    text: `${openTime} – ${closeTime}`,
     isOpen: true,
-    openTime,
-    closeTime,
+    periods: dayPeriods.map(p => ({
+      openTime: formatHoursMins(p.openTime),
+      closeTime: formatHoursMins(p.closeTime),
+    })),
   };
 };
 
@@ -281,9 +323,11 @@ export const getDayBar = (hours: string[]): DayBar[] => {
 // #region Conflict Detection
 
 export type ScheduleConflict = {
-  arrivalConflict: boolean;
-  departureConflict: boolean;
   hoursConflict: boolean;
+  periods: {
+    openConflict: boolean;
+    closeConflict: boolean;
+  }[];
 };
 
 export const getScheduleConflict = (
@@ -292,7 +336,7 @@ export const getScheduleConflict = (
   placeHours: PlaceHours | null,
   travelDay: string
 ): ScheduleConflict => {
-  const none = { arrivalConflict: false, departureConflict: false, hoursConflict: false };
+  const none = { hoursConflict: false, periods: [] };
 
   if (!placeHours || !placeHours.periods || placeHours.periods.length === 0) return none;
 
@@ -305,15 +349,14 @@ export const getScheduleConflict = (
   const dayIndex = DAY_NAME_TO_INDEX[dayName];
   if (dayIndex === undefined) return none;
 
-  const period = placeHours.periods.find(p => p.day === dayIndex);
-  if (!period) return none;
+  const dayPeriods = placeHours.periods.filter(p => p.day === dayIndex);
+  if (dayPeriods.length === 0) return { hoursConflict: false, periods: [] };
 
-  // Parse "HHMM" 24-hour string into a Date
   const parsePeriodsTime = (hhmm: string): Date => {
     const h = parseInt(hhmm.slice(0, 2));
     const m = parseInt(hhmm.slice(2, 4));
     const date = new Date(2000, 0, 1);
-    if (h < 4) date.setDate(2); // handle midnight crossover
+    if (h < 4) date.setDate(2);
     date.setHours(h, m, 0, 0);
     return date;
   };
@@ -330,16 +373,44 @@ export const getScheduleConflict = (
     return date;
   };
 
-  const openTime = parsePeriodsTime(period.openTime);
-  const closeTime = parsePeriodsTime(period.closeTime);
   const arrival = parseScheduleTime(arrivalTime);
   const departure = parseScheduleTime(departureTime);
 
-  const arrivalConflict = arrival < openTime;
-  const departureConflict = departure > closeTime;
-  const hoursConflict = arrivalConflict || departureConflict;
+  const parsedPeriods = dayPeriods.map(period => ({
+    openTime: parsePeriodsTime(period.openTime),
+    closeTime: parsePeriodsTime(period.closeTime),
+  }));
 
-  return { arrivalConflict, departureConflict, hoursConflict };
+  const hasAnyOverlap = parsedPeriods.some(p => arrival < p.closeTime && departure > p.openTime);
+
+  const periodConflicts = parsedPeriods.map((p, i) => {
+    const visitOverlaps = arrival < p.closeTime && departure > p.openTime;
+
+    if (visitOverlaps) {
+      return {
+        openConflict: arrival < p.openTime,
+        closeConflict: departure > p.closeTime,
+      };
+    }
+
+    if (!hasAnyOverlap) {
+      // Visit falls entirely outside this period — flag boundaries of nearest periods
+      const isBeforeFirst = i === 0 && departure <= p.openTime;
+      const isAfterLast = i === parsedPeriods.length - 1 && arrival >= p.closeTime;
+      const isAfterPrev = i > 0 && arrival >= parsedPeriods[i - 1].closeTime && departure <= p.openTime;
+
+      return {
+        openConflict: isBeforeFirst || isAfterPrev,
+        closeConflict: isAfterLast || (i < parsedPeriods.length - 1 && arrival >= p.closeTime && departure <= parsedPeriods[i + 1].openTime),
+      };
+    }
+
+    return { openConflict: false, closeConflict: false };
+  });
+
+  const hoursConflict = periodConflicts.some(p => p.openConflict || p.closeConflict);
+
+  return { hoursConflict, periods: periodConflicts };
 };
 
 // #endregion

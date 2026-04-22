@@ -739,7 +739,7 @@ export default function ItineraryScreen() {
               venue.placeHours ?? null,
               travelDay
             )
-          : { arrivalConflict: false, departureConflict: false, hoursConflict: false };
+          : { hoursConflict: false, periods: [] };
 
         return (
           <ScaleDecorator>
@@ -819,20 +819,30 @@ export default function ItineraryScreen() {
                   
                   <Text style={styles.venueJustification}>{venue.justification}</Text>
                   
-                  <Text style={[styles.venueHours, !hoursDisplay.isOpen && { color: "#922b21", fontWeight: "700" }]}>
-                    {"Hours: "}
-                    {hoursDisplay.openTime ?? hoursDisplay.text}
-                    {conflict.arrivalConflict && hoursDisplay.openTime
-                      ? <><Text>{"\u200A"}</Text><Ionicons name="alert-circle-outline" size={14} color="#922b21" /></>
-                      : null}
-                    {hoursDisplay.openTime && hoursDisplay.closeTime
-                      ? <Text>{" \u2013 "}</Text>
-                      : null}
-                    {hoursDisplay.closeTime ?? null}
-                    {conflict.departureConflict && hoursDisplay.closeTime
-                      ? <Ionicons name="alert-circle-outline" size={14} color="#922b21" />
-                      : null}
-                  </Text>
+                  <View style={styles.venueHoursRow}>
+                    <Text style={[styles.venueHours, !hoursDisplay.isOpen && { color: "#922b21", fontWeight: "700" }]}>
+                      {"Hours: "}
+                    </Text>
+                    <View>
+                      {hoursDisplay.periods.length === 0 ? (
+                        <Text style={styles.venueHours}>
+                          {hoursDisplay.isOpen ? "Verify before visiting" : "Closed"}
+                        </Text>
+                      ) : hoursDisplay.periods.map((period, i) => (
+                        <Text key={i} style={styles.venueHours}>
+                          {period.openTime}
+                          {conflict.periods[i]?.openConflict
+                            ? <><Text>{"\u200A"}</Text><Ionicons name="alert-circle-outline" size={14} color="#922b21" /></>
+                            : null}
+                          {" \u2013 "}
+                          {period.closeTime}
+                          {conflict.periods[i]?.closeConflict
+                            ? <><Text>{"\u200A"}</Text><Ionicons name="alert-circle-outline" size={14} color="#922b21" /></>
+                            : null}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
 
                   {Array.isArray(venue.hours) && venue.hours.length > 0 && (
                     <View style={styles.dayBarRow}>
@@ -1235,6 +1245,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     color: "#111",
+  },
+  venueHoursRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
 
   // #endregion

@@ -43,7 +43,9 @@ export type Venue = {
     minute: "2-digit",
     hour12: true,
   });
-  const filtered = filterAndMapPlaces(nearbyPlaces, venuePreferences);
+  const filtered = filterAndMapPlaces(nearbyPlaces, venuePreferences, latitude, longitude);
+  console.log("filtered count:", filtered.length);
+
   const placesList = filtered
     .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — Open now: ${p.openNow ?? "unknown"}`)
     .join("\n");
