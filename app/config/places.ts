@@ -90,6 +90,13 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceHours | nul
 
 import { VenueType } from "./durations";
 
+// Hybrid scoring weights — must sum to 1.0
+const SCORE_WEIGHT_RATING    = 0.4;  // venue quality (Google rating / 5.0)
+const SCORE_WEIGHT_PROXIMITY = 0.3;  // distance from user (normalized 0–1, inverted)
+const SCORE_WEIGHT_LOVED     = 0.3;  // bonus for user-loved venue types
+
+// Maps Google Places types to our internal venue type buckets.
+// Order matters — first match wins when a place has multiple types.
 const GOOGLE_TYPE_TO_VENUE_TYPE: Partial<Record<string, VenueType>> = {
   // Coffee & Cafes
   "cafe":                    "coffee_shop",
@@ -102,15 +109,14 @@ const GOOGLE_TYPE_TO_VENUE_TYPE: Partial<Record<string, VenueType>> = {
   // Museums
   "museum":                  "museum",
 
-  // Bars
+  // Bars (breweries also surface here — identified by Claude from name/context)
   "bar":                     "bar",
 
   // Parks & Viewpoints
   "park":                    "park_viewpoint",
   "natural_feature":         "park_viewpoint",
 
-  // Live Music
-  // (live music venues surface via tourist_attraction/point_of_interest)
+  // Live Music — surfaces via tourist_attraction/point_of_interest, identified by Claude
 
   // Performing Arts
   "performing_arts_theater": "performing_arts",
@@ -127,7 +133,7 @@ const GOOGLE_TYPE_TO_VENUE_TYPE: Partial<Record<string, VenueType>> = {
   // Nightlife
   "night_club":              "nightclub",
 
-  // Cultural Heritage
+  // Cultural Heritage — religious types require tourist_attraction co-tag (see getVenueTypeForPlace)
   "church":                  "cultural_heritage",
   "hindu_temple":            "cultural_heritage",
   "mosque":                  "cultural_heritage",
@@ -136,10 +142,13 @@ const GOOGLE_TYPE_TO_VENUE_TYPE: Partial<Record<string, VenueType>> = {
   "library":                 "cultural_heritage",
 };
 
+// Religious types that require a tourist_attraction co-tag to pass the filter
 const RELIGIOUS_TYPES = new Set([
   "church", "hindu_temple", "mosque", "synagogue", "cemetery"
 ]);
 
+// Minimum review counts by venue type — lower for fast-turnover food/drink venues
+// to allow discovery of new spots; higher for established destinations
 const MIN_REVIEWS: Partial<Record<VenueType, number>> = {
   coffee_shop:         10,
   restaurant:          10,
@@ -157,17 +166,19 @@ const MIN_REVIEWS: Partial<Record<VenueType, number>> = {
   performing_arts:     100,
 };
 
+// Maps a Google place's types array to our venue type bucket.
+// Returns null if no match or if a religious place lacks a tourist co-tag.
 export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
   const typeSet = new Set(types);
 
-  // Religious places require tourist_attraction or point_of_interest co-tag
+  // Religious places only pass if they're also tagged as a tourist attraction
   const hasReligiousType = types.some(t => RELIGIOUS_TYPES.has(t));
   if (hasReligiousType) {
     if (!typeSet.has("tourist_attraction") && !typeSet.has("point_of_interest")) return null;
     return "cultural_heritage";
   }
 
-  // Find the first matching Google type in priority order
+  // First matching Google type wins
   for (const type of types) {
     const venueType = GOOGLE_TYPE_TO_VENUE_TYPE[type];
     if (venueType) return venueType;
@@ -176,6 +187,7 @@ export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
   return null;
 };
 
+// Haversine distance in miles between two lat/lng points
 const haversineDistance = (
   lat1: number, lng1: number,
   lat2: number, lng2: number
@@ -190,6 +202,9 @@ const haversineDistance = (
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+// Filters raw Google Places results to our venue types, applies quality thresholds,
+// respects user venue preferences, then scores and sorts by a hybrid of
+// rating, proximity, and loved venue type bonus.
 export const filterAndMapPlaces = (
   places: PlacesVenue[],
   venuePreferences: Record<string, "love" | "hate" | "neutral">,
@@ -197,12 +212,14 @@ export const filterAndMapPlaces = (
   userLng: number,
 ): (PlacesVenue & { venueType: VenueType })[] => {
   const results: (PlacesVenue & { venueType: VenueType })[] = [];
-  
-  console.log("total incoming:", places.length)
+
+  console.log("total incoming:", places.length);
   let failedType = 0, failedHate = 0, failedRating = 0, failedReviews = 0;
 
   for (const place of places) {
     const venueType = getVenueTypeForPlace(place.types);
+    console.log(place.name, "→", place.types, "→", venueType ?? "FILTERED");
+
     if (!venueType) { failedType++; continue; }
     if (venuePreferences[venueType] === "hate") { failedHate++; continue; }
     if (!place.rating || place.rating < 4.0) { failedRating++; continue; }
@@ -213,19 +230,19 @@ export const filterAndMapPlaces = (
 
   console.log(`filtered out — type:${failedType} hate:${failedHate} rating:${failedRating} reviews:${failedReviews} | passed:${results.length}`);
 
-  // Normalize distances
+  // Normalize distances against the furthest result so proximity score is always 0–1
   const distances = results.map(p => haversineDistance(userLat, userLng, p.latitude, p.longitude));
   const maxDist = Math.max(...distances, 1);
 
-  // Score and sort
+  // Hybrid score: rating quality + proximity + loved venue type bonus
   return results
     .map((p, i) => {
       const normalizedDist = distances[i] / maxDist;
       const lovedBonus = venuePreferences[p.venueType] === "love" ? 1 : 0;
       const score =
-        (p.rating! / 5.0) * 0.4 +
-        (1 - normalizedDist) * 0.3 +
-        lovedBonus * 0.3;
+        (p.rating! / 5.0) * SCORE_WEIGHT_RATING +
+        (1 - normalizedDist) * SCORE_WEIGHT_PROXIMITY +
+        lovedBonus * SCORE_WEIGHT_LOVED;
       return { ...p, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -235,11 +252,13 @@ export const filterAndMapPlaces = (
 
 // #region Days and Hours Presentation
 
+// Day bar entry — one per day of the week (Mo–Su) for the open/closed indicator strip
 export type DayBar = {
   day: string;      // "Mo", "Tu" etc
   isOpen: boolean;
 };
 
+// Maps TravelDay store values to full day names for string matching
 const DAY_MAP: Record<string, string> = {
   "today": "",  // resolved at call time
   "MON": "Monday",
@@ -253,19 +272,22 @@ const DAY_MAP: Record<string, string> = {
 
 const TODAY_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Resolves "today" to the current day name, or maps abbreviation to full name
 export const resolveDay = (travelDay: string): string => {
   if (travelDay === "today") return TODAY_DAY_NAMES[new Date().getDay()];
   return DAY_MAP[travelDay] ?? "";
 };
 
+// Hours display type — isOpen flag plus one entry per open period for the travel day
 export type HoursDisplay = {
   isOpen: boolean;
   periods: {
-    openTime: string;
-    closeTime: string;
+    openTime: string;   // formatted, e.g. "5 PM"
+    closeTime: string;  // formatted, e.g. "10 PM"
   }[];
 };
 
+// Converts "HHMM" 24-hour string to display format — omits ":00" when on the hour
 const formatHoursMins = (hhmm: string): string => {
   const h = parseInt(hhmm.slice(0, 2));
   const m = parseInt(hhmm.slice(2, 4));
@@ -275,6 +297,8 @@ const formatHoursMins = (hhmm: string): string => {
   return `${hour}${mins} ${ampm}`;
 };
 
+// Returns open periods for the travel day, formatted for display.
+// Uses weekdayText to detect Closed, periods array for actual open/close times.
 export const getHoursForDay = (
   placeHours: PlaceHours | null,
   travelDay: string
@@ -288,13 +312,14 @@ export const getHoursForDay = (
   };
   const dayIndex = DAY_NAME_TO_INDEX[dayName];
 
-  // Check for Closed via weekdayText
+  // weekdayText is the most reliable source for "Closed" status
   const entry = placeHours.weekdayText.find(h => h.startsWith(dayName));
   if (entry) {
     const hoursStr = entry.split(": ").slice(1).join(": ");
     if (hoursStr === "Closed") return { isOpen: false, periods: [] };
   }
 
+  // Filter periods to travel day — multiple entries indicate split hours
   const dayPeriods = placeHours.periods.filter(p => p.day === dayIndex);
   if (dayPeriods.length === 0) return { isOpen: true, periods: [] };
 
@@ -307,6 +332,7 @@ export const getHoursForDay = (
   };
 };
 
+// Builds the Mo–Su day bar from weekdayText — open = not explicitly "Closed"
 export const getDayBar = (hours: string[]): DayBar[] => {
   const days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
   const fullNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -322,6 +348,7 @@ export const getDayBar = (hours: string[]): DayBar[] => {
 
 // #region Conflict Detection
 
+// Conflict result type — one entry per open period for the travel day
 export type ScheduleConflict = {
   hoursConflict: boolean;
   periods: {
@@ -340,7 +367,7 @@ export const getScheduleConflict = (
 
   if (!placeHours || !placeHours.periods || placeHours.periods.length === 0) return none;
 
-  // Resolve travel day to a Google day index (0=Sunday)
+  // Resolve travel day string to Google day index (0=Sunday)
   const dayName = resolveDay(travelDay);
   const DAY_NAME_TO_INDEX: Record<string, number> = {
     "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
@@ -349,9 +376,11 @@ export const getScheduleConflict = (
   const dayIndex = DAY_NAME_TO_INDEX[dayName];
   if (dayIndex === undefined) return none;
 
+  // Filter periods to only those matching the travel day (handles split hours)
   const dayPeriods = placeHours.periods.filter(p => p.day === dayIndex);
-  if (dayPeriods.length === 0) return { hoursConflict: false, periods: [] };
+  if (dayPeriods.length === 0) return none;
 
+  // Parse "HHMM" 24-hour string into a Date (Jan 1 2000 reference, day bumped for post-midnight)
   const parsePeriodsTime = (hhmm: string): Date => {
     const h = parseInt(hhmm.slice(0, 2));
     const m = parseInt(hhmm.slice(2, 4));
@@ -361,6 +390,7 @@ export const getScheduleConflict = (
     return date;
   };
 
+  // Parse "h:mm AM/PM" schedule time string into a Date (same reference date)
   const parseScheduleTime = (timeStr: string): Date => {
     const [time, ampm] = timeStr.split(" ");
     const [hours, minutes] = time.split(":").map(Number);
@@ -373,20 +403,23 @@ export const getScheduleConflict = (
     return date;
   };
 
+  // Convert schedule and period times to comparable Date objects
   const arrival = parseScheduleTime(arrivalTime);
   const departure = parseScheduleTime(departureTime);
-
   const parsedPeriods = dayPeriods.map(period => ({
     openTime: parsePeriodsTime(period.openTime),
     closeTime: parsePeriodsTime(period.closeTime),
   }));
 
+  // Check if the visit overlaps with any open period at all
   const hasAnyOverlap = parsedPeriods.some(p => arrival < p.closeTime && departure > p.openTime);
 
+  // For each period, determine which boundaries (open/close) are conflicting
   const periodConflicts = parsedPeriods.map((p, i) => {
     const visitOverlaps = arrival < p.closeTime && departure > p.openTime;
 
     if (visitOverlaps) {
+      // Visit overlaps this period — flag whichever boundary is violated
       return {
         openConflict: arrival < p.openTime,
         closeConflict: departure > p.closeTime,
@@ -394,20 +427,23 @@ export const getScheduleConflict = (
     }
 
     if (!hasAnyOverlap) {
-      // Visit falls entirely outside this period — flag boundaries of nearest periods
+      // Visit falls entirely outside all periods (before first open, after last close,
+      // or in a gap between periods) — flag the nearest relevant boundaries
       const isBeforeFirst = i === 0 && departure <= p.openTime;
       const isAfterLast = i === parsedPeriods.length - 1 && arrival >= p.closeTime;
       const isAfterPrev = i > 0 && arrival >= parsedPeriods[i - 1].closeTime && departure <= p.openTime;
+      const isInGapAfter = i < parsedPeriods.length - 1 && arrival >= p.closeTime && departure <= parsedPeriods[i + 1].openTime;
 
       return {
         openConflict: isBeforeFirst || isAfterPrev,
-        closeConflict: isAfterLast || (i < parsedPeriods.length - 1 && arrival >= p.closeTime && departure <= parsedPeriods[i + 1].openTime),
+        closeConflict: isAfterLast || isInGapAfter,
       };
     }
 
     return { openConflict: false, closeConflict: false };
   });
 
+  // Hoist conflict flag for quick checks elsewhere
   const hoursConflict = periodConflicts.some(p => p.openConflict || p.closeConflict);
 
   return { hoursConflict, periods: periodConflicts };
