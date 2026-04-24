@@ -153,11 +153,10 @@ export default function MapScreen() {
     setVenues([]);
     setRouteLegs([]);
     try {
-      const nearbyPlaces = await getNearbyPlaces(coords.latitude, coords.longitude);
       const result = await generateItinerary(
         coords.latitude, coords.longitude,
         time || "a full day", pace || "well-paced", budget || "flexible",
-        notes, nearbyPlaces, venuePreferences
+        notes, venuePreferences
       );
       const optimized = optimizeRoute(coords.latitude, coords.longitude, result);
       setVenues(optimized);

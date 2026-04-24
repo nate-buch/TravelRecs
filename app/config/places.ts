@@ -88,64 +88,12 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceHours | nul
 
 // #region Venue Type Mapping and Filtering
 
-import { VenueType } from "./durations";
+import { VenueType, getVenueTypeForPlace } from "../../shared/venueTypeMapping";
 
 // Hybrid scoring weights — must sum to 1.0
 const SCORE_WEIGHT_RATING    = 0.4;  // venue quality (Google rating / 5.0)
 const SCORE_WEIGHT_PROXIMITY = 0.3;  // distance from user (normalized 0–1, inverted)
 const SCORE_WEIGHT_LOVED     = 0.3;  // bonus for user-loved venue types
-
-// Maps Google Places types to our internal venue type buckets.
-// Order matters — first match wins when a place has multiple types.
-const GOOGLE_TYPE_TO_VENUE_TYPE: Partial<Record<string, VenueType>> = {
-  // Coffee & Cafes
-  "cafe":                    "coffee_shop",
-  "bakery":                  "coffee_shop",
-
-  // Restaurants
-  "restaurant":              "restaurant",
-  "meal_takeaway":           "street_food",
-
-  // Museums
-  "museum":                  "museum",
-
-  // Bars (breweries also surface here — identified by Claude from name/context)
-  "bar":                     "bar",
-
-  // Parks & Viewpoints
-  "park":                    "park_viewpoint",
-  "natural_feature":         "park_viewpoint",
-
-  // Live Music — surfaces via tourist_attraction/point_of_interest, identified by Claude
-
-  // Performing Arts
-  "performing_arts_theater": "performing_arts",
-
-  // Attractions & Landmarks
-  "tourist_attraction":      "attraction_landmark",
-  "point_of_interest":       "attraction_landmark",
-  "amusement_park":          "attraction_landmark",
-  "stadium":                 "attraction_landmark",
-
-  // Art Galleries
-  "art_gallery":             "art_gallery",
-
-  // Nightlife
-  "night_club":              "nightclub",
-
-  // Cultural Heritage — religious types require tourist_attraction co-tag (see getVenueTypeForPlace)
-  "church":                  "cultural_heritage",
-  "hindu_temple":            "cultural_heritage",
-  "mosque":                  "cultural_heritage",
-  "synagogue":               "cultural_heritage",
-  "cemetery":                "cultural_heritage",
-  "library":                 "cultural_heritage",
-};
-
-// Religious types that require a tourist_attraction co-tag to pass the filter
-const RELIGIOUS_TYPES = new Set([
-  "church", "hindu_temple", "mosque", "synagogue", "cemetery"
-]);
 
 // Minimum review counts by venue type — lower for fast-turnover food/drink venues
 // to allow discovery of new spots; higher for established destinations
@@ -166,29 +114,8 @@ const MIN_REVIEWS: Partial<Record<VenueType, number>> = {
   performing_arts:     100,
 };
 
-// Maps a Google place's types array to our venue type bucket.
-// Returns null if no match or if a religious place lacks a tourist co-tag.
-export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
-  const typeSet = new Set(types);
-
-  // Religious places only pass if they're also tagged as a tourist attraction
-  const hasReligiousType = types.some(t => RELIGIOUS_TYPES.has(t));
-  if (hasReligiousType) {
-    if (!typeSet.has("tourist_attraction") && !typeSet.has("point_of_interest")) return null;
-    return "cultural_heritage";
-  }
-
-  // First matching Google type wins
-  for (const type of types) {
-    const venueType = GOOGLE_TYPE_TO_VENUE_TYPE[type];
-    if (venueType) return venueType;
-  }
-
-  return null;
-};
-
 // Haversine distance in miles between two lat/lng points
-const haversineDistance = (
+export const haversineDistance = (
   lat1: number, lng1: number,
   lat2: number, lng2: number
 ): number => {

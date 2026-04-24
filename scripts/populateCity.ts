@@ -4,6 +4,7 @@ dotenv.config();
 
 import { initializeApp } from "firebase/app";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
+import { getVenueTypeForPlace } from "../shared/venueTypeMapping";
 
 // #region Firebase Init
 
@@ -63,6 +64,7 @@ type RawPlace = {
   geometry:        { location: { lat: number; lng: number } };
   types:           string[];
   rating?:         number;
+  price_level?:    number;
   user_ratings_total?: number;
   opening_hours?:  { open_now: boolean };
   business_status?: string;
@@ -224,6 +226,8 @@ const main = async () => {
           latitude:         place.geometry.location.lat,
           longitude:        place.geometry.location.lng,
           types:            place.types,
+          venueType:        getVenueTypeForPlace(place.types) ?? null,
+          priceLevel:       place.price_level ?? null,
           queryType:        type,
           rating:           place.rating,
           userRatingsTotal: place.user_ratings_total,

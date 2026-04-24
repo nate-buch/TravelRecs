@@ -9,12 +9,14 @@ import { useAppStore } from "./config/store";
 
 export default function Index() {
   const setPreferences = useAppStore(state => state.setPreferences);
+  const setVenuePreferences = useAppStore(state => state.setVenuePreferences);
 
   useEffect(() => {
     (async () => {
       const saved = await loadPreferences();
       if (saved) {
         setPreferences(saved.time, saved.pace, saved.budget, saved.notes);
+        if (saved.venuePreferences) setVenuePreferences(saved.venuePreferences);
       }
     })();
   }, []);

@@ -1,6 +1,7 @@
 // #region Imports
 
-import { filterAndMapPlaces, getPlaceDetails, PlaceHours, PlacesVenue } from "./places";
+import { filterCityVenues, getCityVenues } from "./cityVenues";
+import { PlaceHours } from "./places";
 
 // #endregion
 
@@ -16,7 +17,8 @@ export type Venue = {
   placeHours?: PlaceHours;
   address: string;
   types?: string[];
-  venueType?: string;
+  venueType?: string
+  priceLevel?: number | null;
   locked?: boolean;
   pending?: boolean;
 };
@@ -32,9 +34,9 @@ export type Venue = {
     pace: string,
     budget: string,
     notes: string,
-    nearbyPlaces: PlacesVenue[],
     venuePreferences: Record<string, "love" | "hate" | "neutral">
   ): Promise<Venue[]> => {
+    console.log("generateItinerary called");
 
   // #region Build Context
 
@@ -43,11 +45,13 @@ export type Venue = {
     minute: "2-digit",
     hour12: true,
   });
-  const filtered = filterAndMapPlaces(nearbyPlaces, venuePreferences, latitude, longitude);
+  const allVenues = await getCityVenues("countries/usa/texas/austin");
+  const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude);
   console.log("filtered count:", filtered.length);
-
+  console.log("venue types in filtered:", [...new Set(filtered.map(v => v.venueType))]);
+  
   const placesList = filtered
-    .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — Open now: ${p.openNow ?? "unknown"}`)
+    .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"}`)
     .join("\n");
 
   // #endregion
@@ -128,6 +132,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   }
   const text = data.content[0].text;
   const clean = text.replace(/```json|```/g, "").trim();
+  console.log("Claude raw response:", clean);
 
   // #endregion
 
@@ -137,12 +142,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
     const parsed = JSON.parse(clean) as { name: string; justification: string; venueType: string }[];
     
     const venues = await Promise.all(parsed.map(async item => {
-      const match = nearbyPlaces.find(p => p.name === item.name);
-
-      // Fetch live hours from Google Places if we have a placeId
-      const placeHours = match?.placeId 
-        ? await getPlaceDetails(match.placeId)
-        : null;
+      const match = filtered.find(p => p.name === item.name);
 
       return {
         name: item.name,
@@ -150,11 +150,12 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
         longitude: match?.longitude ?? 0,
         address: match?.address ?? "",
         justification: item.justification,
-        hours: placeHours?.weekdayText ?? [],
+        hours: match?.placeHours?.weekdayText ?? [],
         placeId: match?.placeId,
-        placeHours: placeHours,
+        placeHours: match?.placeHours ?? undefined,
         types: match?.types ?? [],
         venueType: item.venueType,
+        priceLevel: match?.priceLevel ?? null,
         pending: false,
       };
     }));

@@ -5,7 +5,8 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "strict": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "rootDir": ".."
   },
-  "include": ["*.ts"]
+  "include": ["*.ts", "../shared/*.ts"]
 }

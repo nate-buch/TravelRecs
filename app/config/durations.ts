@@ -1,18 +1,5 @@
-export type VenueType =
-  | "coffee_shop"
-  | "restaurant"
-  | "museum"
-  | "bar"
-  | "park_viewpoint"
-  | "live_music"
-  | "performing_arts"
-  | "attraction_landmark"
-  | "art_gallery"
-  | "market"
-  | "nightclub"
-  | "brewery"
-  | "street_food"
-  | "cultural_heritage";
+import type { VenueType } from "../../shared/venueTypeMapping";
+export type { VenueType };
 
 export type Pace = "fast" | "medium" | "slow";
 
