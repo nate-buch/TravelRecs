@@ -13,10 +13,10 @@ import { useAppStore } from "../config/store";
 
 // #region Types and Constants
 
-const TIME_OPTIONS = [
-  { id: "day",     label: "Just 1 Day",  desc: "Quick Trip"       },
-  { id: "weekend", label: "2-3 Days",    desc: "Staying Around"   },
-  { id: "week",    label: "5+ Days",     desc: "Exploring"        },
+const DEPTH_OPTIONS = [
+  { id: "sightsee",  label: "Sightsee",  desc: "Highlights"   },
+  { id: "explore",   label: "Explore",   desc: "Branch Out"   },
+  { id: "go_local",  label: "Go Local",  desc: "Hidden Gems"  },
 ];
 
 const PACE_OPTIONS = [
@@ -106,13 +106,13 @@ export default function PreferencesScreen() {
 
   // #region Local States
 
-  const [time, setTime] = useState("");
+  const [depth, setDepth] = useState("");
   const [pace, setPace] = useState("");
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
   const [saved, setSaved] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const canSave = time && pace && budget;
+  const canSave = depth && pace && budget;
   const [venuePreferences, setVenuePreferencesLocal] = useState<Record<string, "love" | "hate" | "neutral">>({});
 
   // #endregion
@@ -123,7 +123,7 @@ export default function PreferencesScreen() {
     (async () => {
       const saved = await loadPreferences();
       if (saved) {
-        setTime(saved.time);
+        setDepth(saved.depth);
         setPace(saved.pace);
         setBudget(saved.budget);
         setNotes(saved.notes);
@@ -161,8 +161,8 @@ export default function PreferencesScreen() {
           <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
           <View style={styles.headingDivider} />
 
-          <Text style={styles.sectionTitle}>How long is your visit?</Text>
-          <HorizontalOptions options={TIME_OPTIONS} selected={time} onSelect={setTime} />
+          <Text style={styles.sectionTitle}>How do you like to explore?</Text>
+          <HorizontalOptions options={DEPTH_OPTIONS} selected={depth} onSelect={setDepth} />
           <View style={styles.sectionDivider} />
 
           <Text style={styles.sectionTitle}>How fast do you want to move?</Text>
@@ -235,8 +235,8 @@ export default function PreferencesScreen() {
             style={[styles.saveButton, !canSave && styles.saveButtonDisabled, saved && styles.saveButtonSaved]}
             disabled={!canSave}
             onPress={async () => {
-              await savePreferences(time, pace, budget, notes, venuePreferences);
-              setPreferences(time, pace, budget, notes);
+              await savePreferences(depth, pace, budget, notes, venuePreferences);
+              setPreferences(depth, pace, budget, notes);
               setVenuePreferences(venuePreferences);
               setSaved(true);
               setTimeout(() => {

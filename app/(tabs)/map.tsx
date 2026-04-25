@@ -82,7 +82,7 @@ export default function MapScreen() {
   // #region Store
 
   const {
-    time, pace, budget, notes,
+    depth, pace, budget, notes,
     venues, setVenues, venuePreferences,
     setRouteLegs, routeLegs,
     setGpsLocation, routeOrigin, gpsLocation,
@@ -155,7 +155,7 @@ export default function MapScreen() {
     try {
       const result = await generateItinerary(
         coords.latitude, coords.longitude,
-        time || "a full day", pace || "well-paced", budget || "flexible",
+        depth || "a full day", pace || "well-paced", budget || "flexible",
         notes, venuePreferences
       );
       const optimized = optimizeRoute(coords.latitude, coords.longitude, result);
@@ -647,7 +647,7 @@ export default function MapScreen() {
 
     </MapboxGL.MapView>
 
-    {!loading && venues.length === 0 && routeOrigin && time && pace && budget && (
+    {!loading && venues.length === 0 && routeOrigin && depth && pace && budget && (
       <View style={styles.emptyState}>
         <Text style={styles.emptyStateText}>
           To get started, tap Generate Itinerary below or add venues above!
@@ -668,7 +668,7 @@ export default function MapScreen() {
 
       {loading && <LoadingMessage />}
 
-      {!time && !pace && !budget && (
+      {!depth && !pace && !budget && (
         <TouchableOpacity
           style={styles.nudgeBanner}
           onPress={() => router.push("/(tabs)/preferences")}
@@ -681,7 +681,7 @@ export default function MapScreen() {
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {!loading && venues.length === 0 && routeOrigin && time && pace && budget && (
+      {!loading && venues.length === 0 && routeOrigin && depth && pace && budget && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
             To get started, tap Generate Itinerary below or add venues above!

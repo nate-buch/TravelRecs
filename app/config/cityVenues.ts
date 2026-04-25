@@ -59,15 +59,24 @@ export const filterCityVenues = (
   venuePreferences: Record<string, "love" | "hate" | "neutral">,
   userLat: number,
   userLng: number,
+  budget: string,
 ): CachedVenue[] => {
-  // Apply preference filtering
+  const isLoved = (venueType: string) => venuePreferences[venueType] === "love";
+
   const filtered = venues.filter(v => {
     if (!v.venueType) return false;
     if (venuePreferences[v.venueType] === "hate") return false;
+
+    // Budget filter
+    const p = v.priceLevel;
+    if (p !== null && p !== undefined) {
+      if (budget === "inexpensive" && p > 2) return false;
+      if (budget === "YOLO vacay" && p < 2 && !isLoved(v.venueType)) return false;
+      if (budget === "mid-range" && p > 2 && !isLoved(v.venueType)) return false;
+    }
+
     return true;
   });
-  console.log("venuePreferences:", venuePreferences);
-  console.log("art_gallery pref:", venuePreferences["art_gallery"]);
 
   // Score and sort
   const distances = filtered.map(v => haversineDistance(userLat, userLng, v.latitude, v.longitude));

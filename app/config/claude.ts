@@ -30,13 +30,12 @@ export type Venue = {
   export const generateItinerary = async (
     latitude: number,
     longitude: number,
-    time: string,
+    depth: string,
     pace: string,
     budget: string,
     notes: string,
     venuePreferences: Record<string, "love" | "hate" | "neutral">
   ): Promise<Venue[]> => {
-    console.log("generateItinerary called");
 
   // #region Build Context
 
@@ -46,10 +45,7 @@ export type Venue = {
     hour12: true,
   });
   const allVenues = await getCityVenues("countries/usa/texas/austin");
-  const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude);
-  console.log("filtered count:", filtered.length);
-  console.log("venue types in filtered:", [...new Set(filtered.map(v => v.venueType))]);
-  
+  const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude, budget);  
   const placesList = filtered
     .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"}`)
     .join("\n");
@@ -61,7 +57,7 @@ export type Venue = {
 `You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
 
 Their preferences:
-- Time available: ${time}
+- Exploration depth: ${depth}
 - Pace: ${pace}
 - Budget: ${budget}
 - Special instructions (MUST follow these): ${notes || "None"}

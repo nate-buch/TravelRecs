@@ -15,7 +15,7 @@ export default function Index() {
     (async () => {
       const saved = await loadPreferences();
       if (saved) {
-        setPreferences(saved.time, saved.pace, saved.budget, saved.notes);
+        setPreferences(saved.depth, saved.pace, saved.budget, saved.notes);
         if (saved.venuePreferences) setVenuePreferences(saved.venuePreferences);
       }
     })();

@@ -43,7 +43,7 @@ export default function ItineraryScreen() {
   // #region Store
   
   const {
-    venues, time, pace, budget, notes, routeLegs,
+    venues, depth, pace, budget, notes, routeLegs,
     setVenues, setRouteLegs, setTimeBlocks, setItinerary,
     routeOrigin, timeBlocks, legModes, setLegModes,
     addRemovedVenueName, travelDay,

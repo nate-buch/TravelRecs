@@ -11,7 +11,7 @@ type AppStore = {
   // Set on the Preferences tab, persisted to Firestore, and passed to Claude
   // when generating or re-generating an itinerary.
 
-  time: string;       // Trip length (e.g. "full day", "weekend")
+  depth: string;       // Trip depth (e.g. "highlights", "explore")
   pace: string;       // Travel pace (e.g. "typical", "hustle", "easy")
   budget: string;     // Budget level (e.g. "mid-range", "inexpensive", "YOLO vacay")
   notes: string;      // Freeform instructions passed verbatim to Claude
@@ -83,7 +83,7 @@ type AppStore = {
 export const useAppStore = create<AppStore>((set, get) => ({
 
   // ─── User Preferences ────────────────────────────────────────────────────
-  time: "",
+  depth: "",
   pace: "",
   budget: "",
   notes: "",
@@ -112,7 +112,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ─── Actions ─────────────────────────────────────────────────────────────
 
   // Itinerary metadata
-  setPreferences: (time, pace, budget, notes) => set({ time, pace, budget, notes }),
+  setPreferences: (depth, pace, budget, notes) => set({ depth, pace, budget, notes }),
   setGpsLocation: (location) => set({ gpsLocation: location, routeOrigin: location }),
   setRouteOrigin: (location) => set({ routeOrigin: location }),
 

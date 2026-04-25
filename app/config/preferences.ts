@@ -4,14 +4,14 @@ import { db } from "./firebase";
 const DEVICE_ID = "default_user"; // We'll replace this with real auth in Phase 5
 
 export const savePreferences = async (
-  time: string,
+  depth: string,
   pace: string,
   budget: string,
   notes: string,
   venuePreferences: Record<string, "love" | "hate" | "neutral">
 ) => {
   await setDoc(doc(db, "preferences", DEVICE_ID), {
-    time, pace, budget, notes, venuePreferences,
+    depth, pace, budget, notes, venuePreferences,
     updatedAt: new Date().toISOString(),
   });
 };
