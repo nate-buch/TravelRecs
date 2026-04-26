@@ -26,6 +26,7 @@ export type CachedVenue = {
   zipCode: string;
   cachedAt: string;
   hoursRefreshedAt: string;
+  normalizedReviewScore: number | null;
 };
 
 // #endregion
@@ -54,12 +55,19 @@ const SCORE_WEIGHT_RATING    = 0.4;
 const SCORE_WEIGHT_PROXIMITY = 0.3;
 const SCORE_WEIGHT_LOVED     = 0.3;
 
+const DEPTH_RANGES: Record<string, { min: number; max: number }> = {
+  sightsee: { min: 0.8, max: 1.0 },
+  explore:  { min: 0.5, max: 0.8 },
+  go_local: { min: 0.2, max: 0.5 },
+};
+
 export const filterCityVenues = (
   venues: CachedVenue[],
   venuePreferences: Record<string, "love" | "hate" | "neutral">,
   userLat: number,
   userLng: number,
   budget: string,
+  depth: string[],
 ): CachedVenue[] => {
   const isLoved = (venueType: string) => venuePreferences[venueType] === "love";
 
@@ -71,9 +79,23 @@ export const filterCityVenues = (
     const p = v.priceLevel;
     if (p !== null && p !== undefined) {
       if (budget === "inexpensive" && p > 2) return false;
+      if (budget === "mid-range" && p === 3 && venuePreferences[v.venueType!] === "hate") return false;
+      if (budget === "mid-range" && p === 4 && !isLoved(v.venueType)) return false;
       if (budget === "YOLO vacay" && p < 2 && !isLoved(v.venueType)) return false;
-      if (budget === "mid-range" && p > 2 && !isLoved(v.venueType)) return false;
     }
+
+    // Depth filter
+    // NOTE: venues with null normalizedReviewScore are filtered out entirely.
+    // This should never happen if scoreAndCleanVenues runs correctly after every
+    // population or refresh. If venues are being unexpectedly excluded, check
+    // whether the scoring pipeline completed successfully.
+    // TODO: add a runtime warning/alert when null scores are encountered at query time.
+    const score = v.normalizedReviewScore;
+    if (score === null || score === undefined) return false;
+    if (depth.length > 0 && !depth.some(d => {
+      const range = DEPTH_RANGES[d];
+      return range && score >= range.min && score < range.max;
+    })) return false;
 
     return true;
   });

@@ -73,8 +73,15 @@ const RELIGIOUS_TYPES = new Set([
 
 // #region Exported Function
 
+// Cultural/experiential types that take priority over generic types like bar,
+// restaurant, cafe when both are present on the same venue.
+const CULTURAL_PRIORITY: VenueType[] = [
+  "museum", "performing_arts", "art_gallery", "live_music", "nightclub", "cultural_heritage"
+];
+
 // Maps a Google place's types array to our internal venue type.
 // Returns null if no match or if a religious place lacks a tourist co-tag.
+// Priority order: cultural/experiential → specific → first match
 export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
   const typeSet = new Set(types);
 
@@ -84,6 +91,13 @@ export const getVenueTypeForPlace = (types: string[]): VenueType | null => {
     return "cultural_heritage";
   }
 
+  // Rule 1: cultural/experiential types win over generic types
+  for (const type of types) {
+    const venueType = GOOGLE_TYPE_TO_VENUE_TYPE[type];
+    if (venueType && CULTURAL_PRIORITY.includes(venueType)) return venueType;
+  }
+
+  // Rule 2: fall back to first match
   for (const type of types) {
     const venueType = GOOGLE_TYPE_TO_VENUE_TYPE[type];
     if (venueType) return venueType;

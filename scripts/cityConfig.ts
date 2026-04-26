@@ -1,3 +1,9 @@
+// #region Imports
+
+import { VenueType } from "../shared/venueTypeMapping";
+
+// #endregion
+
 // #region Types
 
 export type CityConfig = {
@@ -6,6 +12,8 @@ export type CityConfig = {
   restaurantKeywords: string[];
   excludedPlaceIds: Set<string>;  // manually excluded venues
   includedPlaceIds: Set<string>;  // force-included venues that might fail filters
+  venueTypeOverrides: Record<string, VenueType>; // manually override wrong types
+  venueNameOverrides: Record<string, string>;
 };
 
 // #endregion
@@ -29,6 +37,14 @@ export const CITY_CONFIGS: Record<string, CityConfig> = {
     "ChIJh30H8Ei0RIYRaBy-_5Y7Mow",  // Peace Point at Lady Bird Lake
     "ChIJsydngTO0RIYRZD6iXMFulUE",  // Holly Shores at Town Lake
   ]),
+  venueTypeOverrides: {},
+  venueNameOverrides: {
+    "ChIJNZ29lk20RIYRLLDwJHtZExY": "Festival Beach Park",         // Edward Rendon Sr. Park at Festival Beach in Town Lake Metropolitan Park
+    "ChIJh31x-NK1RIYRIyeTCHwKFoc": "Everest Momo & Food Truck",   // Everest Momo & Food Truck(Nepali and Indian cuisine)
+    "ChIJwYlSqae1RIYRyqQConsdnyc": "Iron Cactus",                  // Iron Cactus Mexican Restaurant and Margarita Bar
+    "ChIJq-GPb--1RIYRWZzC76jq704": "Santa Catarina",               // Santa Catarina Mexican Restaurant - Cherrywood
+    "ChIJk-YOCri1RIYRiu30qDjUFQ4": "Figure 8 Coffee",             // Figure 8 Coffee Purveyors Cafe & Roastery
+  },
 },
 
 };

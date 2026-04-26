@@ -64,19 +64,17 @@ const VENUE_TYPE_GROUPS: { id: string; label: string }[][] = [
 
 // #endregion
 
-// #region Horizontal Option Row
+// #region Horizontal Options Rows
 
 function HorizontalOptions({ options, selected, onSelect }: HorizontalOptionProps) {
   return (
     <View style={styles.horizontalRow}>
-      {options.map((o, i) => (
+      {options.map((o) => (
         <TouchableOpacity
           key={o.id}
           style={[
             styles.horizontalCard,
             selected === o.id && styles.horizontalCardSelected,
-            i === 0 && styles.horizontalCardFirst,
-            i === options.length - 1 && styles.horizontalCardLast,
           ]}
           onPress={() => onSelect(o.id)}
         >
@@ -84,6 +82,36 @@ function HorizontalOptions({ options, selected, onSelect }: HorizontalOptionProp
             {o.label}
           </Text>
           <Text style={[styles.horizontalCardDesc, selected === o.id && styles.horizontalCardDescSelected]}>
+            {o.desc}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+type MultiHorizontalOptionProps = {
+  options: { id: string; label: string; desc: string }[];
+  selected: string[];
+  onSelect: (id: string) => void;
+};
+
+function MultiHorizontalOptions({ options, selected, onSelect }: MultiHorizontalOptionProps) {
+  return (
+    <View style={styles.horizontalRow}>
+      {options.map((o) => (
+        <TouchableOpacity
+          key={o.id}
+          style={[
+            styles.horizontalCard,
+            selected.includes(o.id) && styles.horizontalCardMultiSelected,
+          ]}
+          onPress={() => onSelect(o.id)}
+        >
+          <Text style={[styles.horizontalCardLabel, selected.includes(o.id) && styles.horizontalCardMultiLabelSelected]}>
+            {o.label}
+          </Text>
+          <Text style={[styles.horizontalCardDesc, selected.includes(o.id) && styles.horizontalCardMultiDescSelected]}>
             {o.desc}
           </Text>
         </TouchableOpacity>
@@ -106,13 +134,13 @@ export default function PreferencesScreen() {
 
   // #region Local States
 
-  const [depth, setDepth] = useState("");
+  const [depth, setDepth] = useState<string[]>([]);
   const [pace, setPace] = useState("");
   const [budget, setBudget] = useState("");
   const [notes, setNotes] = useState("");
   const [saved, setSaved] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const canSave = depth && pace && budget;
+  const canSave = pace && budget;
   const [venuePreferences, setVenuePreferencesLocal] = useState<Record<string, "love" | "hate" | "neutral">>({});
 
   // #endregion
@@ -161,8 +189,14 @@ export default function PreferencesScreen() {
           <Text style={styles.heading}>TRAVEL PREFERENCES</Text>
           <View style={styles.headingDivider} />
 
-          <Text style={styles.sectionTitle}>How do you like to explore?</Text>
-          <HorizontalOptions options={DEPTH_OPTIONS} selected={depth} onSelect={setDepth} />
+          <Text style={styles.sectionTitle}>How do you want to travel? <Text style={styles.multiSelectHint}>(any or all!)</Text></Text>
+          <MultiHorizontalOptions
+            options={DEPTH_OPTIONS}
+            selected={depth}
+            onSelect={(id) => setDepth(prev => 
+              prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
+            )}
+          />
           <View style={styles.sectionDivider} />
 
           <Text style={styles.sectionTitle}>How fast do you want to move?</Text>
@@ -316,11 +350,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  horizontalCardFirst: {
-    // reserved for any first-card specific styling
+  horizontalCardMultiSelected: {
+    backgroundColor: "#1a6b3a",
+    borderColor: "#145c30",
   },
-  horizontalCardLast: {
-    // reserved for any last-card specific styling
+  horizontalCardMultiLabelSelected: {
+    color: "#fff",
+  },
+  horizontalCardMultiDescSelected: {
+    color: "#a8d5b8",
+  },
+  multiSelectHint: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#444",
+    fontStyle: "italic",
   },
   horizontalCardSelected: {
     backgroundColor: "#444444",

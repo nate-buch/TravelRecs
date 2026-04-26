@@ -1,10 +1,15 @@
+// #region Imports
+
 // Load env vars from .env before anything else
 import * as dotenv from "dotenv";
 dotenv.config();
 
 import { initializeApp } from "firebase/app";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
-import { getVenueTypeForPlace } from "../shared/venueTypeMapping";
+import { getVenueTypeForPlace, VenueType } from "../shared/venueTypeMapping";
+import { scoreAndCleanVenues } from "./scoreAndCleanVenues";
+
+// #endregion
 
 // #region Firebase Init
 
@@ -184,6 +189,8 @@ const main = async () => {
     const restaurantQueries = TYPE_QUERIES.filter(q => q.type === "restaurant");
     const otherQueries      = TYPE_QUERIES.filter(q => q.type !== "restaurant");
 
+    // #region Non-Restaurant Queries
+
     // ── Non-restaurant queries ──────────────────────────────────────────────
     for (const query of otherQueries) {
       const { type } = query;
@@ -219,14 +226,31 @@ const main = async () => {
         const hours = await fetchHours(place.place_id);
         await sleep(100);
 
+        // NOTE: some queries return venues with only generic Google types like
+        // "establishment, point_of_interest, tourist_attraction". We use the queryType
+        // to reclassify when the resolved type is too generic (attraction_landmark)
+        // or unmapped. Monitor when adding new cities for unexpected mappings.
+        const rawVenueType = getVenueTypeForPlace(place.types);
+        const QUERY_TYPE_FALLBACK: Partial<Record<string, VenueType>> = {
+          "performing_arts_theater": "performing_arts",
+          "museum":                  "museum",
+          "art_gallery":             "art_gallery",
+          "night_club":              "nightclub",
+          "bar":                     "bar",
+          "park":                    "park_viewpoint",
+        };
+        const resolvedVenueType = (rawVenueType === null || rawVenueType === "attraction_landmark")
+          ? (QUERY_TYPE_FALLBACK[type] ?? rawVenueType)
+          : rawVenueType;
+
         const venueDoc = {
           placeId:          place.place_id,
-          name:             place.name,
+          name:             CITY.venueNameOverrides[place.place_id] ?? place.name,
           address:          place.formatted_address ?? place.vicinity ?? "",
           latitude:         place.geometry.location.lat,
           longitude:        place.geometry.location.lng,
           types:            place.types,
-          venueType:        getVenueTypeForPlace(place.types) ?? null,
+          venueType:        resolvedVenueType ?? null,
           priceLevel:       place.price_level ?? null,
           queryType:        type,
           rating:           place.rating,
@@ -234,8 +258,9 @@ const main = async () => {
           businessStatus:   place.business_status ?? "OPERATIONAL",
           placeHours:       hours,
           zipCode,
-          cachedAt:         new Date().toISOString(),
-          hoursRefreshedAt: new Date().toISOString(),
+          cachedAt:              new Date().toISOString(),
+          hoursRefreshedAt:      new Date().toISOString(),
+          normalizedReviewScore: null,
         };
 
         const ref = doc(db, `${CITY_PATH}/venues/${place.place_id}`);
@@ -248,6 +273,10 @@ const main = async () => {
 
       console.log(`   → ${typeWritten} written, ${typeSkipped} skipped\n`);
     }
+
+    // #endregion
+
+    // #region Restaurant Queries
 
     // ── Restaurant queries — collect all, normalize combined ────────────────
     if (restaurantQueries.length > 0) {
@@ -289,19 +318,22 @@ const main = async () => {
 
         const venueDoc = {
           placeId:          place.place_id,
-          name:             place.name,
+          name:             CITY.venueNameOverrides[place.place_id] ?? place.name,
           address:          place.formatted_address ?? place.vicinity ?? "",
           latitude:         place.geometry.location.lat,
           longitude:        place.geometry.location.lng,
           types:            place.types,
+          venueType:        getVenueTypeForPlace(place.types) ?? null,
+          priceLevel:       place.price_level ?? null,
           queryType:        "restaurant",
           rating:           place.rating,
           userRatingsTotal: place.user_ratings_total,
           businessStatus:   place.business_status ?? "OPERATIONAL",
           placeHours:       hours,
           zipCode,
-          cachedAt:         new Date().toISOString(),
-          hoursRefreshedAt: new Date().toISOString(),
+          cachedAt:              new Date().toISOString(),
+          hoursRefreshedAt:      new Date().toISOString(),
+          normalizedReviewScore: null,
         };
 
         const ref = doc(db, `${CITY_PATH}/venues/${place.place_id}`);
@@ -315,9 +347,12 @@ const main = async () => {
       console.log(`   → ${typeWritten} written, ${typeSkipped} skipped\n`);
     }
 
+    // #endregion
+
   } // end zipCode loop
 
   console.log(`\n✅ Done! ${written} venues written total.`);
+  await scoreAndCleanVenues(CITY_PATH);
   process.exit(0);
 };
 

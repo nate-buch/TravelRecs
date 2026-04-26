@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "populate-city": "ts-node --project ./scripts/tsconfig.json ./scripts/populateCity.ts"
+    "populate-city": "ts-node --project ./scripts/tsconfig.json ./scripts/populateCity.ts",
+    "list-long-names": "ts-node --project ./scripts/tsconfig.json ./scripts/listLongNames.ts"
   },
   "dependencies": {
     "@expo/ngrok": "4.1.0",

@@ -155,7 +155,7 @@ export default function MapScreen() {
     try {
       const result = await generateItinerary(
         coords.latitude, coords.longitude,
-        depth || "a full day", pace || "well-paced", budget || "flexible",
+        depth, pace || "well-paced", budget || "flexible",
         notes, venuePreferences
       );
       const optimized = optimizeRoute(coords.latitude, coords.longitude, result);

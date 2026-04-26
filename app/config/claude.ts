@@ -30,7 +30,7 @@ export type Venue = {
   export const generateItinerary = async (
     latitude: number,
     longitude: number,
-    depth: string,
+    depth: string[],
     pace: string,
     budget: string,
     notes: string,
@@ -45,7 +45,7 @@ export type Venue = {
     hour12: true,
   });
   const allVenues = await getCityVenues("countries/usa/texas/austin");
-  const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude, budget);  
+  const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude, budget, depth);
   const placesList = filtered
     .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"}`)
     .join("\n");
@@ -57,7 +57,7 @@ export type Venue = {
 `You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
 
 Their preferences:
-- Exploration depth: ${depth}
+- Exploration depth: ${depth.length > 0 ? depth.join(", ") : "no preference"}
 - Pace: ${pace}
 - Budget: ${budget}
 - Special instructions (MUST follow these): ${notes || "None"}

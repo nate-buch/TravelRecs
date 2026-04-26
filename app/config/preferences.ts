@@ -4,7 +4,7 @@ import { db } from "./firebase";
 const DEVICE_ID = "default_user"; // We'll replace this with real auth in Phase 5
 
 export const savePreferences = async (
-  depth: string,
+  depth: string[],
   pace: string,
   budget: string,
   notes: string,
