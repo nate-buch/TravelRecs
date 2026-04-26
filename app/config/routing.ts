@@ -22,11 +22,15 @@ const haversine = (
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const totalDistance = (
+const firstLeg = (
   userLat: number, userLng: number,
   venues: Venue[]
 ): number => {
-  let dist = haversine(userLat, userLng, venues[0].latitude, venues[0].longitude);
+  return haversine(userLat, userLng, venues[0].latitude, venues[0].longitude);
+};
+
+const internalDistance = (venues: Venue[]): number => {
+  let dist = 0;
   for (let i = 0; i < venues.length - 1; i++) {
     dist += haversine(
       venues[i].latitude, venues[i].longitude,
@@ -34,6 +38,13 @@ const totalDistance = (
     );
   }
   return dist;
+};
+
+const totalDistance = (
+  userLat: number, userLng: number,
+  venues: Venue[]
+): number => {
+  return firstLeg(userLat, userLng, venues) + internalDistance(venues);
 };
 
 // #endregion
@@ -82,8 +93,8 @@ const twoOpt = (
           ...best.slice(i, j + 1).reverse(),
           ...best.slice(j + 1),
         ];
-        if (totalDistance(userLat, userLng, newRoute) <
-            totalDistance(userLat, userLng, best)) {
+        if (internalDistance(newRoute) < internalDistance(best)) {
+          console.log(`2-opt swap i=${i} j=${j}: ${internalDistance(best).toFixed(3)} → ${internalDistance(newRoute).toFixed(3)}`);
           best = newRoute;
           improved = true;
         }
@@ -154,14 +165,22 @@ export const optimizeRoute = (
 ): Venue[] => {
   if (venues.length <= 2) return venues;
 
+  console.log("PRE-OPTIMIZE:", venues.map(v => `${v.name} (${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)})`));
+
   const first = venues[0];
   const rest = venues.slice(1);
 
   const nn = nearestNeighbor(first.latitude, first.longitude, rest);
+
+  console.log("POST-NN:", [first, ...nn].map(v => `${v.name} (${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)})`), `internal: ${internalDistance(nn).toFixed(3)}mi`);
+
   const optimized = twoOpt(first.latitude, first.longitude, nn);
   const checked = sanityCheck(optimized);
 
+  console.log("POST-OPTIMIZE:", [first, ...checked].map(v => `${v.name} (${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)})`), `internal: ${internalDistance(checked).toFixed(3)}mi`);
+
   return [first, ...checked];
+
 };
 
 // Optimizes for purely user-generated routes, 

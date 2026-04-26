@@ -34,27 +34,57 @@ export type Venue = {
     pace: string,
     budget: string,
     notes: string,
-    venuePreferences: Record<string, "love" | "hate" | "neutral">
+    venuePreferences: Record<string, "love" | "hate" | "neutral">,
+    travelDay: string,
   ): Promise<Venue[]> => {
 
   // #region Build Context
 
-  const currentTime = new Date().toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const isToday = travelDay === "today";
+  const currentTime = isToday
+    ? new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "7:00 AM";
+
+  const dayContext = isToday
+    ? `today (${new Date().toLocaleDateString("en-US", { weekday: "long" })})`
+    : `this ${travelDay.charAt(0) + travelDay.slice(1).toLowerCase()}`;
+
   const allVenues = await getCityVenues("countries/usa/texas/austin");
   const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude, budget, depth);
   const placesList = filtered
-    .map((p, i) => `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"}`)
+    .map((p, i) => {
+      const hours = p.placeHours?.weekdayText?.join(", ") ?? "Hours unknown";
+      return `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — Hours: ${hours}`;
+    })
     .join("\n");
 
   // #endregion
 
   // #region Build Prompt
+
+  const VENUE_TIME_WINDOWS: Record<string, string> = {
+    coffee_shop:         "anytime in the morning, midday, or early afternoon",
+    restaurant:          "anytime midday, or broadly in the late afternoon through late evening",
+    bar:                 "anytime from late afternoon onward",
+    street_food:         "anytime the venue is open",
+    brewery:             "anytime the venue is open",
+    cultural_heritage:   "anytime the venue is open",
+    attraction_landmark: "anytime the venue is open",
+    museum:              "anytime the venue is open",
+    art_gallery:         "anytime the venue is open",
+    performing_arts:     "anytime the venue is open",
+    live_music:          "anytime the venue is open",
+    nightclub:           "anytime in the evening onward",
+    market:              "anytime the venue is open",
+    park_viewpoint:      "anytime before local sundown",
+  };
+
   const prompt = 
-`You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The current time is ${currentTime}.
+`You are an expert local travel curator and route optimizer. The user is at coordinates ${latitude}, ${longitude}. The user is planning their itinerary for ${dayContext}, starting at ${currentTime}.
 
 Their preferences:
 - Exploration depth: ${depth.length > 0 ? depth.join(", ") : "no preference"}
@@ -65,31 +95,32 @@ Their preferences:
 Here are real nearby places from Google Places:
 ${placesList}
 
-Your job is to select and ORDER several stops for an optimized day itinerary. Follow these rules strictly:
+Your job is to select and ORDER stops for an optimized day itinerary. Aim for the following number of stops based on the user's pace:
+- easy: 4-5 stops
+- typical: 5-7 stops
+- hustle: 7-9 stops
+
+Only deviate from these targets if there genuinely aren't enough suitable venues available, or if hours of operation make it impossible to fit more stops into the day. 
+Follow these rules strictly:
 
 ROUTING RULES:
 - Order stops to minimize total travel distance — avoid criss-crossing or backtracking as much as possible
 - Strongly lean toward grouping nearby stops together
 
-SEQUENCE RULES:
-- Follow a logical progression: daytime activities → dinner → drinks/nightlife
-- Never place nightlife before a sit-down meal; late-night food can come after drinks but not before
-- Never place live music venues before dinner unless it's a daytime show
-
-TIMING RULES:
-- Current time is ${currentTime} — only recommend stops that make sense from now onwards
-- Breakfast spots → morning only (before 11am)
-- Lunch restaurants → around 11:00am-2:00pm
-- Museums, galleries, attractions → daytime (9am-6pm), and cross-check their days and hours of operation
-- Bars, cocktail lounges, nightlife → after 5pm
-- Parks and outdoor spots → daytime, avoid if near closing
-- If a venue is likely closed now, or will be by the time the user reaches it, skip it
-
-DIVERSITY RULES:
+ROUTE COHERENCE GUIDELINES:
+- Follow a logical progression through the day — daytime activities, then food, then evening drinks or nightlife
 - Avoid placing two sit-down food establishments back to back
 - Small bites, cafes, and street food are more flexible and can be interspersed anywhere
-- Mix venue types where possible — alternate between activity/attraction types to create a dynamic day of experiences
-- Consider when the user would be eating, and avoid recommending another food stop immediately after — they might want to walk or do an activity in between
+- Mix venue types where possible — alternate between activity and food/drink stops to create a dynamic day
+- Consider when the user would be eating, and avoid recommending another food stop immediately after
+
+TIMING RULES:
+- The user is planning for ${dayContext}, starting at ${currentTime} — only recommend stops that make sense from this point onwards
+- Cross-check each venue's hours of operation for ${dayContext} before recommending it — skip any venue that will be closed or closing soon by the time the user would reasonably arrive
+- Each venue type has a natural time window — respect these when sequencing stops:
+${Object.entries(VENUE_TIME_WINDOWS).map(([type, window]) => `  • ${type}: ${window}`).join("\n")}
+- Use common sense — if a venue closes at 2:30 PM and the user could arrive by 2:00 PM, it's a valid stop even if it's near closing
+- Parks and outdoor venues should be visited before local sundown
 
 You MUST respond with ONLY a valid JSON array of venue names, no other text. Example format:
 [
