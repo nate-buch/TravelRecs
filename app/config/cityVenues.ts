@@ -1,6 +1,7 @@
 // #region Imports
 
 import { collection, getDocs } from "firebase/firestore";
+import { haversineDistance } from "../../shared/utilities";
 import { VenueType } from "../../shared/venueTypeMapping";
 import { db } from "./firebase";
 import { PlaceHours } from "./places";
@@ -48,8 +49,6 @@ export const getCityVenues = async (
 // #endregion
 
 // #region Filtering and Scoring
-
-import { haversineDistance } from "./places";
 
 const SCORE_WEIGHT_RATING    = 0.4;
 const SCORE_WEIGHT_PROXIMITY = 0.3;

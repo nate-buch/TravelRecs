@@ -1,38 +1,23 @@
 // #region Imports
 
 import { Venue } from "./claude";
+import { haversineDistance } from "../../shared/utilities";
 
 // #endregion
 
 // #region Math Utilities
 
-const toRad = (deg: number) => deg * Math.PI / 180;
-
-const haversine = (
-  lat1: number, lng1: number,
-  lat2: number, lng2: number
-): number => {
-  const R = 3958.8;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
 const firstLeg = (
   userLat: number, userLng: number,
   venues: Venue[]
 ): number => {
-  return haversine(userLat, userLng, venues[0].latitude, venues[0].longitude);
+  return haversineDistance(userLat, userLng, venues[0].latitude, venues[0].longitude);
 };
 
 const internalDistance = (venues: Venue[]): number => {
   let dist = 0;
   for (let i = 0; i < venues.length - 1; i++) {
-    dist += haversine(
+    dist += haversineDistance(
       venues[i].latitude, venues[i].longitude,
       venues[i + 1].latitude, venues[i + 1].longitude
     );
@@ -64,7 +49,7 @@ const nearestNeighbor = (
     let nearestIdx = 0;
     let nearestDist = Infinity;
     unvisited.forEach((v, i) => {
-      const d = haversine(curLat, curLng, v.latitude, v.longitude);
+      const d = haversineDistance(curLat, curLng, v.latitude, v.longitude);
       if (d < nearestDist) {
         nearestDist = d;
         nearestIdx = i;

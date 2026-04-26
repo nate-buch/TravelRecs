@@ -3,6 +3,7 @@
 import { Venue } from "./claude";
 import { RouteLeg } from "./directions";
 import { formatTime, getVenueDuration, roundToQuarter, VenueType } from "./durations";
+import { parseTime } from "../../shared/utilities";
 
 // #endregion
 
@@ -13,23 +14,6 @@ export type TimeBlock = {
   departureTime: string;
   durationMinutes: number;
   locked: boolean;
-};
-
-// #endregion
-
-// #region Utilities
-
-const parseTime = (timeStr: string): Date => {
-  const [time, ampm] = timeStr.split(" ");
-  const [hours, minutes] = time.split(":").map(Number);
-  const date = new Date(2000, 0, 1); // fixed reference date — Jan 1 2000
-  let h = hours;
-  if (ampm === "AM" && hours === 12) h = 0;
-  else if (ampm === "PM" && hours !== 12) h = hours + 12;
-  // If midnight or later, bump to next day so it's always after evening times
-  if (h < 4) date.setDate(2);
-  date.setHours(h, minutes, 0, 0);
-  return date;
 };
 
 // #endregion

@@ -1,3 +1,9 @@
+// #region Imports
+
+import { haversineDistance } from "../../shared/utilities";
+
+// #endregion
+
 // #region Google Places API Data Pull
 
 export type PlacesVenue = {
@@ -112,21 +118,6 @@ const MIN_REVIEWS: Partial<Record<VenueType, number>> = {
   market:              100,
   cultural_heritage:   100,
   performing_arts:     100,
-};
-
-// Haversine distance in miles between two lat/lng points
-export const haversineDistance = (
-  lat1: number, lng1: number,
-  lat2: number, lng2: number
-): number => {
-  const R = 3958.8;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 // Filters raw Google Places results to our venue types, applies quality thresholds,
