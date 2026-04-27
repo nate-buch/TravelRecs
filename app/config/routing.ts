@@ -79,7 +79,6 @@ const twoOpt = (
           ...best.slice(j + 1),
         ];
         if (internalDistance(newRoute) < internalDistance(best)) {
-          console.log(`2-opt swap i=${i} j=${j}: ${internalDistance(best).toFixed(3)} → ${internalDistance(newRoute).toFixed(3)}`);
           best = newRoute;
           improved = true;
         }
@@ -149,21 +148,12 @@ export const optimizeRoute = (
   venues: Venue[]
 ): Venue[] => {
   if (venues.length <= 2) return venues;
-
-  console.log("PRE-OPTIMIZE:", venues.map(v => `${v.name} (${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)})`));
-
   const first = venues[0];
   const rest = venues.slice(1);
 
   const nn = nearestNeighbor(first.latitude, first.longitude, rest);
-
-  console.log("POST-NN:", [first, ...nn].map(v => `${v.name} (${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)})`), `internal: ${internalDistance(nn).toFixed(3)}mi`);
-
   const optimized = twoOpt(first.latitude, first.longitude, nn);
   const checked = sanityCheck(optimized);
-
-  console.log("POST-OPTIMIZE:", [first, ...checked].map(v => `${v.name} (${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)})`), `internal: ${internalDistance(checked).toFixed(3)}mi`);
-
   return [first, ...checked];
 
 };

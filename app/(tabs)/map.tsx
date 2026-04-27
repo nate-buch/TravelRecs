@@ -11,14 +11,15 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { DaySelector } from "../../components/DaySelector";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
-import { generateItinerary, Venue } from "../config/claude";
+import { generateItinerary, generateJustifications, Venue } from "../config/claude";
 import { LEG_COLORS } from "../config/colors";
 import { getDefaultMode, getRouteLegs } from "../config/directions";
 import { formatDuration } from "../config/durations";
-import { getNearbyPlaces, getPlaceDetails } from "../config/places";
-import { optimizeRoute, optimizeRouteFromUser } from "../config/routing";
+import { getPlaceDetails } from "../config/places";
+import { optimizeRouteFromUser } from "../config/routing";
 import { calculateSchedule, recalculateSchedule } from "../config/schedule";
 import { useAppStore } from "../config/store";
+import { optimizeTRAVEL } from "../config/travel";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
@@ -153,19 +154,48 @@ export default function MapScreen() {
     setVenues([]);
     setRouteLegs([]);
     try {
-      const result = await generateItinerary(
+       const result = await generateItinerary(
         coords.latitude, coords.longitude,
         depth, pace || "well-paced", budget || "flexible",
         notes, venuePreferences, travelDay
       );
-      const optimized = optimizeRoute(coords.latitude, coords.longitude, result);
+
+      const isToday = travelDay === "today";
+      const startTime = isToday
+        ? new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\u202F/g, " ")
+        : "7:00 AM";
+        
+      const optimized = optimizeTRAVEL(
+        result,
+        { latitude: coords.latitude, longitude: coords.longitude },
+        pace || "typical",
+        venuePreferences,
+        travelDay,
+        startTime,
+      );
+
       setVenues(optimized);
-      const legs = await getRouteLegs([coords.longitude, coords.latitude], optimized);
-      setRouteLegs(legs);
+      const legs = await getRouteLegs([coords.longitude, coords.latitude], optimized);setRouteLegs(legs);
       const modes = legs.map(leg => getDefaultMode(leg, pace));
       setLegModes(modes);
       const blocks = calculateSchedule(optimized, legs, pace, modes, travelDay);
       setTimeBlocks(blocks);
+
+      const justifications = await generateJustifications(
+        optimized,
+        blocks,
+        pace || "well-paced",
+        budget || "flexible",
+        depth,
+        notes,
+        travelDay,
+      );
+      const venuesWithJustifications = optimized.map((v, i) => ({
+        ...v,
+        justification: justifications[i] ?? v.justification,
+      }));
+      setVenues(venuesWithJustifications);
+
       if (result.length > 0) {
         const lngs = [...result.map(v => v.longitude), coords.longitude];
         const lats = [...result.map(v => v.latitude), coords.latitude];

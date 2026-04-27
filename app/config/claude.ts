@@ -1,7 +1,8 @@
 // #region Imports
 
 import { filterCityVenues, getCityVenues } from "./cityVenues";
-import { PlaceHours } from "./places";
+import { PlaceHours, resolveDay } from "./places";
+import { DEFAULT_END_TIME, DEFAULT_START_TIME } from "./travel";
 
 // #endregion
 
@@ -47,7 +48,7 @@ export type Venue = {
         minute: "2-digit",
         hour12: true,
       })
-    : "7:00 AM";
+    : DEFAULT_START_TIME;
 
   const dayContext = isToday
     ? `today (${new Date().toLocaleDateString("en-US", { weekday: "long" })})`
@@ -55,10 +56,17 @@ export type Venue = {
 
   const allVenues = await getCityVenues("countries/usa/texas/austin");
   const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude, budget, depth);
+  
+console.log("venuePreferences at filter time:", JSON.stringify(venuePreferences));
+console.log("filtered count:", filtered.length);
+console.log("sample types:", filtered.slice(0, 10).map(v => `${v.name}: ${v.venueType}`));
+  
   const placesList = filtered
     .map((p, i) => {
-      const hours = p.placeHours?.weekdayText?.join(", ") ?? "Hours unknown";
-      return `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — Hours: ${hours}`;
+      const dayName = resolveDay(travelDay);
+      const todayHours = p.placeHours?.weekdayText?.find(h => h.startsWith(dayName)) ?? "Hours unknown";
+      const hoursDisplay = todayHours.includes(": ") ? todayHours.split(": ").slice(1).join(": ") : todayHours;
+      return `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — ${dayContext} hours: ${hoursDisplay}`;
     })
     .join("\n");
 
@@ -95,12 +103,12 @@ Their preferences:
 Here are real nearby places from Google Places:
 ${placesList}
 
-Your job is to select and ORDER stops for an optimized day itinerary. Aim for the following number of stops based on the user's pace:
-- easy: 4-5 stops
-- typical: 5-7 stops
-- hustle: 7-9 stops
+Your job is to select a candidate pool of venues for an optimized day itinerary. Return MORE than the final number of stops — these candidates will be further optimized for geography and timing. Aim for the following candidate pool sizes based on the user's pace:
+- easy: 10-12 candidates
+- typical: 12-16 candidates
+- hustle: 16-20 candidates
 
-Only deviate from these targets if there genuinely aren't enough suitable venues available, or if hours of operation make it impossible to fit more stops into the day. 
+Only return fewer candidates if there genuinely aren't enough suitable venues available or if hours of operation make it impossible. Do NOT order the candidates — return them in any order.
 Follow these rules strictly:
 
 ROUTING RULES:
@@ -115,12 +123,9 @@ ROUTE COHERENCE GUIDELINES:
 - Consider when the user would be eating, and avoid recommending another food stop immediately after
 
 TIMING RULES:
-- The user is planning for ${dayContext}, starting at ${currentTime} — only recommend stops that make sense from this point onwards
-- Cross-check each venue's hours of operation for ${dayContext} before recommending it — skip any venue that will be closed or closing soon by the time the user would reasonably arrive
-- Each venue type has a natural time window — respect these when sequencing stops:
-${Object.entries(VENUE_TIME_WINDOWS).map(([type, window]) => `  • ${type}: ${window}`).join("\n")}
-- Use common sense — if a venue closes at 2:30 PM and the user could arrive by 2:00 PM, it's a valid stop even if it's near closing
-- Parks and outdoor venues should be visited before local sundown
+- The user's travel window is ${currentTime} to ${DEFAULT_END_TIME}. Only recommend venues that are open during
+some part of this window. If a venue is already closed or closes before the user could reasonably reach it as a 
+first stop, exclude it entirely.
 
 You MUST respond with ONLY a valid JSON array of venue names, no other text. Example format:
 [
@@ -159,7 +164,6 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
   }
   const text = data.content[0].text;
   const clean = text.replace(/```json|```/g, "").trim();
-  console.log("Claude raw response:", clean);
 
   // #endregion
 
@@ -199,28 +203,37 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
 
 // #region Generate Justification API Call
 
-export const generateJustification = async (
-  name: string,
-  address: string,
-  types: string[],
-  time: string,
+export const generateJustifications = async (
+  venues: Venue[],
+  timeBlocks: { arrivalTime: string; departureTime: string }[],
   pace: string,
   budget: string,
+  depth: string[],
   notes: string,
-): Promise<string> => {
-  const prompt = `You are a knowledgeable local travel advisor. A traveler has chosen to visit this venue:
+  travelDay: string,
+): Promise<string[]> => {
+  const venueList = venues.map((v, i) => `
+${i + 1}. ${v.name} (${v.address})
+   Type: ${v.venueType}
+   Arriving: ${timeBlocks[i]?.arrivalTime ?? "unknown"}
+   Departing: ${timeBlocks[i]?.departureTime ?? "unknown"}`
+  ).join("\n");
 
-Name: ${name}
-Address: ${address}
-Type: ${types.slice(0, 3).join(", ")}
+  const prompt = `You are a knowledgeable local travel advisor. A traveler has the following itinerary:
+
+${venueList}
 
 Their travel preferences:
-- Trip length: ${time || "a full day"}
 - Pace: ${pace || "well-paced"}
 - Budget: ${budget || "flexible"}
+- Exploration style: ${depth.length > 0 ? depth.join(", ") : "no preference"}
 - Notes: ${notes || "None"}
+- Travel day: ${travelDay}
 
-Write exactly ONE enthusiastic sentence (max 20 words) explaining why this is a great choice given their preferences. Be specific to the venue. No generic phrases.`;
+For EACH venue, write exactly ONE enthusiastic sentence (max 20 words) explaining why it's a great choice given the time of day they'll be visiting and their preferences. Be specific to the venue and reference the actual visit time where relevant. No generic phrases.
+
+You MUST respond with ONLY a valid JSON array of strings, one per venue, in the same order. Example:
+["Justification for venue 1", "Justification for venue 2"]`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -232,16 +245,19 @@ Write exactly ONE enthusiastic sentence (max 20 words) explaining why this is a 
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 100,
+        max_tokens: 500,
         messages: [{ role: "user", content: prompt }],
       }),
     });
 
     const data = await response.json();
-    if (data.type === "error") return "";
-    return data.content[0].text.trim();
+    if (data.type === "error") return venues.map(() => "");
+    const text = data.content[0].text.trim();
+    const clean = text.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean) as string[];
+    return parsed;
   } catch {
-    return "";
+    return venues.map(() => "");
   }
 };
 
