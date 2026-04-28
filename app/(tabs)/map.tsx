@@ -172,10 +172,13 @@ export default function MapScreen() {
         venuePreferences,
         travelDay,
         startTime,
+        undefined,
+        depth,
       );
 
       setVenues(optimized);
-      const legs = await getRouteLegs([coords.longitude, coords.latitude], optimized);setRouteLegs(legs);
+      const legs = await getRouteLegs([coords.longitude, coords.latitude], optimized);
+      setRouteLegs(legs);
       const modes = legs.map(leg => getDefaultMode(leg, pace));
       setLegModes(modes);
       const blocks = calculateSchedule(optimized, legs, pace, modes, travelDay);

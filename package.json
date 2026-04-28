@@ -5,15 +5,15 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "populate-city": "ts-node --project ./scripts/tsconfig.json ./scripts/populateCity.ts",
     "list-long-names": "ts-node --project ./scripts/tsconfig.json ./scripts/listLongNames.ts"
   },
   "dependencies": {
-    "@expo/ngrok": "4.1.0",
+    "@expo/ngrok": "^4.0.1",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.8",
     "@react-native-community/datetimepicker": "8.4.4",

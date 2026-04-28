@@ -20,6 +20,7 @@ export type Venue = {
   types?: string[];
   venueType?: string
   priceLevel?: number | null;
+  normalizedReviewScore?: number;
   locked?: boolean;
   pending?: boolean;
 };
@@ -66,7 +67,7 @@ console.log("sample types:", filtered.slice(0, 10).map(v => `${v.name}: ${v.venu
       const dayName = resolveDay(travelDay);
       const todayHours = p.placeHours?.weekdayText?.find(h => h.startsWith(dayName)) ?? "Hours unknown";
       const hoursDisplay = todayHours.includes(": ") ? todayHours.split(": ").slice(1).join(": ") : todayHours;
-      return `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — ${dayContext} hours: ${hoursDisplay}`;
+      return `${i + 1}. ${p.name} (${p.address}) — VenueType: ${p.venueType} — Rating: ${p.rating ?? "N/A"} — Score: ${p.normalizedReviewScore?.toFixed(2) ?? "N/A"} — ${dayContext} hours: ${hoursDisplay}`;
     })
     .join("\n");
 
@@ -126,6 +127,12 @@ TIMING RULES:
 - The user's travel window is ${currentTime} to ${DEFAULT_END_TIME}. Only recommend venues that are open during
 some part of this window. If a venue is already closed or closes before the user could reasonably reach it as a 
 first stop, exclude it entirely.
+
+DEPTH DISTRIBUTION RULES:
+- Depth tiers map to normalizedReviewScore ranges: sightsee=0.8-1.0, explore=0.5-0.8, go_local=0.2-0.5
+- The user has selected these depth tiers: ${depth.length > 0 ? depth.join(", ") : "sightsee, explore, go_local"}
+- Aim to distribute candidates roughly equally across the selected depth tiers
+- If a tier has insufficient venues, do your best with what is available — do not pad or repeat venues
 
 You MUST respond with ONLY a valid JSON array of venue names, no other text. Example format:
 [
@@ -187,6 +194,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
         types: match?.types ?? [],
         venueType: item.venueType,
         priceLevel: match?.priceLevel ?? null,
+        normalizedReviewScore: match?.normalizedReviewScore ?? undefined,
         pending: false,
       };
     }));
