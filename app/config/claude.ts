@@ -21,6 +21,7 @@ export type Venue = {
   venueType?: string
   priceLevel?: number | null;
   normalizedReviewScore?: number;
+  venueGravity?: number;
   locked?: boolean;
   pending?: boolean;
 };
@@ -195,6 +196,7 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
         venueType: item.venueType,
         priceLevel: match?.priceLevel ?? null,
         normalizedReviewScore: match?.normalizedReviewScore ?? undefined,
+        venueGravity: match?.venueGravity ?? undefined,
         pending: false,
       };
     }));

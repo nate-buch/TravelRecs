@@ -28,6 +28,7 @@ export type CachedVenue = {
   cachedAt: string;
   hoursRefreshedAt: string;
   normalizedReviewScore: number | null;
+  venueGravity: number | null;
 };
 
 // #endregion

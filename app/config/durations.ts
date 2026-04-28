@@ -9,15 +9,15 @@ const DURATIONS: Record<VenueType, Record<Pace, number>> = {
   museum:              { fast: 60,  medium: 90,  slow: 120 },
   bar:                 { fast: 30,  medium: 45,  slow: 60  },
   park_viewpoint:      { fast: 15,  medium: 30,  slow: 45  },
-  live_music:          { fast: 90,  medium: 120, slow: 150 },
+  live_music:          { fast: 60,  medium: 90,  slow: 120 },
   performing_arts:     { fast: 60,  medium: 90,  slow: 120 },
-  attraction_landmark: { fast: 15,  medium: 15,  slow: 30  },
+  attraction_landmark: { fast: 30,  medium: 30,  slow: 45  },
   art_gallery:         { fast: 30,  medium: 45,  slow: 60  },
-  market:              { fast: 30,  medium: 30,  slow: 45  },
+  market:              { fast: 45,  medium: 45,  slow: 60  },
   nightclub:           { fast: 60,  medium: 90,  slow: 120 },
-  brewery:             { fast: 30,  medium: 45,  slow: 60  },
+  brewery:             { fast: 45,  medium: 60,  slow: 75  },
   street_food:         { fast: 15,  medium: 15,  slow: 15  },
-  cultural_heritage:   { fast: 15,  medium: 30,  slow: 45  },
+  cultural_heritage:   { fast: 30,  medium: 45,  slow: 60  },
 };
 
 export const getPace = (pace: string): Pace => {

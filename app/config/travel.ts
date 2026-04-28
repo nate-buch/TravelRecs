@@ -321,6 +321,7 @@ const venueScore = (
     getMomentumBonus(venue, previousVenue, routeOrigin, pace) +
     getAnchorProximityBonus(venue, prevPoint, nextVenue) +
     (venue.normalizedReviewScore ?? 0) +
+    (venue.venueGravity ?? 0) * 5 +
     (-computeGapPenalty(prevPoint, venue, gapMinutes, pace)) +
     getDiversityPenalty(venue.venueType ?? "", recentTypes, neutralFraction) +
     (viable ? 0 : -50)

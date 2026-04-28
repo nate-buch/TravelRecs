@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "populate-city": "ts-node --project ./scripts/tsconfig.json ./scripts/populateCity.ts",
-    "list-long-names": "ts-node --project ./scripts/tsconfig.json ./scripts/listLongNames.ts"
+    "list-long-names": "ts-node --project ./scripts/tsconfig.json ./scripts/listLongNames.ts",
+    "score-and-clean": "ts-node --project ./scripts/tsconfig.json ./scripts/scoreAndCleanVenues.ts"
   },
   "dependencies": {
     "@expo/ngrok": "^4.0.1",

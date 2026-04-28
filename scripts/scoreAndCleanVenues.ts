@@ -5,6 +5,7 @@ dotenv.config();
 
 import { initializeApp } from "firebase/app";
 import { collection, deleteDoc, getDocs, getFirestore, updateDoc } from "firebase/firestore";
+import { haversineDistance } from "../shared/utilities";
 import { CITY_CONFIGS } from "./cityConfig";
 
 const firebaseConfig = {
@@ -98,7 +99,7 @@ export const scoreAndCleanVenues = async (cityPath: string): Promise<void> => {
   }
 
   // Score each venue and separate survivors from deletions
-  const toUpdate = [];
+  const toUpdate: { ref: any; name: string; score: number; data: any }[] = [];
 
   for (const d of valid) {
     const t = d.data.venueType;
@@ -110,7 +111,7 @@ export const scoreAndCleanVenues = async (cityPath: string): Promise<void> => {
       toDelete.push(d.ref);
       deletedLowScore++;
     } else {
-      toUpdate.push({ ref: d.ref, name: d.data.name, score });
+      toUpdate.push({ ref: d.ref, name: d.data.name, score, data: d.data });
     }
   }
 
@@ -120,6 +121,37 @@ export const scoreAndCleanVenues = async (cityPath: string): Promise<void> => {
 
   for (const d of toUpdate) {
     await updateDoc(d.ref, { normalizedReviewScore: d.score });
+  }
+
+  // Pass 3 — compute venueGravity for each surviving venue
+  // Raw gravity = self.score * SUM(neighbor.normalizedReviewScore / distance) for all neighbors within 0.5mi
+  const GRAVITY_RADIUS_MILES = 0.5;
+  const gravityRaw = toUpdate.map(d => {
+    let raw = 0;
+    for (const neighbor of toUpdate) {
+      if (neighbor.ref.id === d.ref.id) continue;
+      const dist = haversineDistance(
+        d.data.latitude, d.data.longitude,
+        neighbor.data.latitude, neighbor.data.longitude,
+      );
+      if (dist > GRAVITY_RADIUS_MILES) continue;
+      raw += neighbor.score * (1 - dist / GRAVITY_RADIUS_MILES);
+    }
+    return { ref: d.ref, name: d.data.name, raw: d.score * raw };
+  });
+
+  // Normalize to 0-1 across all venues
+  const maxRaw = Math.max(...gravityRaw.map(g => g.raw), 1);
+  const gravityScores = gravityRaw.map(g => ({
+    ref: g.ref,
+    name: g.name,
+    venueGravity: Math.cbrt(g.raw / maxRaw),
+  }));
+
+  // Write venueGravity back to Firestore
+  for (const g of gravityScores) {
+    await updateDoc(g.ref, { venueGravity: g.venueGravity });
+    console.log(`   ✓ ${g.name} venueGravity: ${g.venueGravity.toFixed(3)}`);
   }
 
   for (const ref of toDelete) {
