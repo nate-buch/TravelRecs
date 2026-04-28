@@ -4,7 +4,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { haversineDistance } from "../../shared/utilities";
 import { VenueType } from "../../shared/venueTypeMapping";
 import { db } from "./firebase";
-import { PlaceHours } from "./places";
+import { PlaceHours, resolveDay } from "./places";
 
 // #endregion
 
@@ -115,6 +115,48 @@ export const filterCityVenues = (
       return { ...v, score };
     })
     .sort((a, b) => (b as any).score - (a as any).score);
+};
+
+export const filterVenuesForGap = (
+  venues: CachedVenue[],
+  gapStartHour: number,
+  gapEndHour: number,
+  prevPoint: { latitude: number; longitude: number },
+  nextPoint: { latitude: number; longitude: number },
+  travelDay: string,
+  placedNames: Set<string>,
+): CachedVenue[] => {
+  const RADIUS_MILES = 3;
+
+  const DAY_NAME_TO_INDEX: Record<string, number> = {
+    "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
+    "Thursday": 4, "Friday": 5, "Saturday": 6,
+  };
+
+  const dayName = resolveDay(travelDay);
+  const dayIndex = DAY_NAME_TO_INDEX[dayName];
+
+  return venues.filter(v => {
+    // Filter 1 — not already placed
+    if (placedNames.has(v.name)) return false;
+
+    // Filter 2 — within 3mi of either gap endpoint
+    const distPrev = haversineDistance(v.latitude, v.longitude, prevPoint.latitude, prevPoint.longitude);
+    const distNext = haversineDistance(v.latitude, v.longitude, nextPoint.latitude, nextPoint.longitude);
+    if (distPrev > RADIUS_MILES && distNext > RADIUS_MILES) return false;
+
+    // Filter 3 — open at some point during the gap window
+    if (!v.placeHours) return true; // no hours data, include by default
+    const dayPeriods = v.placeHours.periods.filter(p => p.day === dayIndex);
+    if (dayPeriods.length === 0) return true; // no periods for this day, include by default
+
+    return dayPeriods.some(p => {
+      const openHour  = parseInt(p.openTime.slice(0, 2))  + parseInt(p.openTime.slice(2, 4))  / 60;
+      const closeRaw  = parseInt(p.closeTime.slice(0, 2)) + parseInt(p.closeTime.slice(2, 4)) / 60;
+      const closeHour = closeRaw < 6 ? closeRaw + 24 : closeRaw;
+      return closeHour > gapStartHour && openHour < gapEndHour;
+    });
+  });
 };
 
 // #endregion

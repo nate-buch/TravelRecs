@@ -1,6 +1,6 @@
 // #region Imports
 
-import { filterCityVenues, getCityVenues } from "./cityVenues";
+import { CachedVenue, filterCityVenues, getCityVenues } from "./cityVenues";
 import { PlaceHours, resolveDay } from "./places";
 import { DEFAULT_END_TIME, DEFAULT_START_TIME } from "./travel";
 
@@ -39,7 +39,7 @@ export type Venue = {
     notes: string,
     venuePreferences: Record<string, "love" | "hate" | "neutral">,
     travelDay: string,
-  ): Promise<Venue[]> => {
+  ): Promise<{ venues: Venue[]; allFiltered: CachedVenue[] }> => {
 
   // #region Build Context
 
@@ -201,7 +201,11 @@ You MUST respond with ONLY a valid JSON array of venue names, no other text. Exa
       };
     }));
 
-    return venues.filter(v => v.latitude !== 0);
+    return {
+      venues: venues.filter(v => v.latitude !== 0),
+      allFiltered: filtered,
+    };
+  
   } catch {
     throw new Error("Failed to parse itinerary. Please try again.");
   }

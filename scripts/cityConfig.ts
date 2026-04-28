@@ -24,7 +24,7 @@ export const CITY_CONFIGS: Record<string, CityConfig> = {
 
 "austin-tx": {
   cityPath: "countries/usa/texas/austin",
-  zipCodes: ["78702"],
+  zipCodes: ["78701", "78702", "78704"],
   restaurantKeywords: ["bbq", "tacos", "tex-mex", "breakfast", "food truck"],
   excludedPlaceIds: new Set([
     "ChIJJ5YY6YzLRIYRwehkJIJIhOg",  // K1 Speed Austin
@@ -39,11 +39,18 @@ export const CITY_CONFIGS: Record<string, CityConfig> = {
   ]),
   venueTypeOverrides: {},
   venueNameOverrides: {
-    "ChIJNZ29lk20RIYRLLDwJHtZExY": "Festival Beach Park",         // Edward Rendon Sr. Park at Festival Beach in Town Lake Metropolitan Park
-    "ChIJh31x-NK1RIYRIyeTCHwKFoc": "Everest Momo & Food Truck",   // Everest Momo & Food Truck(Nepali and Indian cuisine)
-    "ChIJwYlSqae1RIYRyqQConsdnyc": "Iron Cactus",                  // Iron Cactus Mexican Restaurant and Margarita Bar
-    "ChIJq-GPb--1RIYRWZzC76jq704": "Santa Catarina",               // Santa Catarina Mexican Restaurant - Cherrywood
-    "ChIJk-YOCri1RIYRiu30qDjUFQ4": "Figure 8 Coffee",             // Figure 8 Coffee Purveyors Cafe & Roastery
+    "ChIJNZ29lk20RIYRLLDwJHtZExY": "Festival Beach Park", 
+    "ChIJh31x-NK1RIYRIyeTCHwKFoc": "Everest Momo & Food Truck",
+    "ChIJwYlSqae1RIYRyqQConsdnyc": "Iron Cactus",
+    "ChIJq-GPb--1RIYRWZzC76jq704": "Santa Catarina",
+    "ChIJk-YOCri1RIYRiu30qDjUFQ4": "Figure 8 Coffee",
+    "ChIJsXlPfo-1RIYRjhLlOWNbgT4": "WEIRD FOOD Chicken & Halal",
+    "ChIJ6xuoSw-1RIYRl2bhcYygHEk": "ACL Live",
+    "ChIJSfh_QgW1RIYRMGJ2BEpGG1c": "Auditorium Shores",
+    "ChIJH4KXLiO1RIYRKGe7mhund5g": "Congress Ave Bat Bridge",
+    "ChIJcfPlAQC1RIYRjitW4SDog1M": "Eggman ATX",
+    "ChIJ0xmkOpJKW4YRsrJkHS-iZLw": "Westlake Performing Arts Center",
+    "ChIJu2YX6yi0RIYRrBTvYTY-yCM": "Guerrero Colorado River Park",  
   },
 },
 

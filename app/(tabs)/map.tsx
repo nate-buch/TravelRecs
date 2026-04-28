@@ -154,7 +154,7 @@ export default function MapScreen() {
     setVenues([]);
     setRouteLegs([]);
     try {
-       const result = await generateItinerary(
+      const { venues: result, allFiltered } = await generateItinerary(
         coords.latitude, coords.longitude,
         depth, pace || "well-paced", budget || "flexible",
         notes, venuePreferences, travelDay
@@ -164,9 +164,11 @@ export default function MapScreen() {
       const startTime = isToday
         ? new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\u202F/g, " ")
         : "7:00 AM";
-        
-      const optimized = optimizeTRAVEL(
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const optimized = await optimizeTRAVEL(
         result,
+        allFiltered,
         { latitude: coords.latitude, longitude: coords.longitude },
         pace || "typical",
         venuePreferences,

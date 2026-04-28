@@ -14,7 +14,7 @@ const firstLeg = (
   return haversineDistance(userLat, userLng, venues[0].latitude, venues[0].longitude);
 };
 
-const internalDistance = (venues: Venue[]): number => {
+export const internalDistance = (venues: Venue[]): number => {
   let dist = 0;
   for (let i = 0; i < venues.length - 1; i++) {
     dist += haversineDistance(

@@ -158,6 +158,18 @@ export const scoreAndCleanVenues = async (cityPath: string): Promise<void> => {
     await deleteDoc(ref);
   }
 
+  // Pass 4 — apply name overrides
+  const cityConfig = Object.values(CITY_CONFIGS).find(c => c.cityPath === cityPath);
+  if (cityConfig) {
+    for (const d of docs) {
+      const override = cityConfig.venueNameOverrides[d.data.placeId];
+      if (override && d.data.name !== override) {
+        await updateDoc(d.ref, { name: override });
+        console.log(`   ✓ Name override: "${d.data.name}" → "${override}"`);
+      }
+    }
+  }
+
   const totalDeleted = toDelete.length;
   const totalVenues  = docs.length;
   const pct = (n: number) => `${((n / totalVenues) * 100).toFixed(1)}%`;

@@ -2,9 +2,11 @@
 
 import { haversineDistance, parseTime } from "../../shared/utilities";
 import { VenueType } from "../../shared/venueTypeMapping";
+import { CachedVenue, filterVenuesForGap } from "./cityVenues";
 import { Venue } from "./claude";
 import { getVenueDuration } from "./durations";
 import { resolveDay } from "./places";
+import { internalDistance } from "./routing";
 
 // #endregion
 
@@ -20,13 +22,6 @@ const ITERATIONS_PER_TEMP = 3;
 const HAVERSINE_CORRECTION = 1.4;  // crow-flies to practical distance
 const WALKING_SPEED_MPH    = 3;
 const DRIVING_SPEED_MPH    = 12;
-
-// Target stop counts by pace
-const TARGET_STOPS: Record<string, number> = {
-  easy:    4,
-  typical: 5,
-  hustle:  7,
-};
 
 // Gap penalty grid — indexed by [paceBucket][gapBucket]
 // Gap buckets: 0 = <15min, 1 = 15-30min, 2 = 30-60min, 3 = >60min
@@ -52,7 +47,8 @@ export const DEFAULT_END_TIME   = "11:00 PM";
 
 const VENUE_TIME_WINDOWS_NUMERIC: Record<string, { start: number; end: number }> = {
   coffee_shop:         { start: 6,  end: 15 },  // 6AM - 3PM
-  restaurant:          { start: 7,  end: 23 },  // 7AM - 11PM (misses breakfast typing issue — known)
+  restaurant_lunch:    { start: 7,  end: 14 },  // 7AM - 2PM, handles breakfast and lunch
+  restaurant_dinner:   { start: 17, end: 22 },  // 5PM - 10PM, handles dinner
   bar:                 { start: 16, end: 2  },  // 4PM - 2AM
   street_food:         { start: 6,  end: 2  },  // anytime open
   brewery:             { start: 11, end: 23 },  // 11AM - 11PM
@@ -65,14 +61,6 @@ const VENUE_TIME_WINDOWS_NUMERIC: Record<string, { start: number; end: number }>
   nightclub:           { start: 20, end: 2  },  // 8PM - 2AM
   market:              { start: 6,  end: 22 },  // 6AM - 10PM
   park_viewpoint:      { start: 6,  end: 20 },  // 6AM - 8PM
-};
-
-// Anchor count matrix — pace × available day length
-const ANCHOR_COUNTS: Record<string, number[]> = {
-  //              <4hrs  4-8hrs  8hrs+
-  easy:          [1,     2,      2],
-  typical:       [1,     2,      2],
-  hustle:        [2,     2,      3],
 };
 
 const DEPTH_RANGES: Record<string, { min: number; max: number }> = {
@@ -179,14 +167,20 @@ const getTimeWindowBonus = (
   venueType: string,
   arrivalHour: number,
 ): number => {
+  if (venueType === "restaurant") {
+    const inLunch  = arrivalHour >= 7  && arrivalHour < 14;
+    const inDinner = arrivalHour >= 17 && arrivalHour < 22;
+    return (inLunch || inDinner) ? 2 : -10;
+  }
+
   const window = VENUE_TIME_WINDOWS_NUMERIC[venueType];
   if (!window) return 0;
 
   const inWindow = window.end < window.start
-    ? arrivalHour >= window.start || arrivalHour < window.end   // wraps midnight
-    : arrivalHour >= window.start && arrivalHour < window.end;  // normal range
+    ? arrivalHour >= window.start || arrivalHour < window.end
+    : arrivalHour >= window.start && arrivalHour < window.end;
 
-  return inWindow ? 2 : -5;
+  return inWindow ? 2 : -10;
 };
 
 const getLovedBonus = (
@@ -209,9 +203,9 @@ const getMomentumBonus = (
 
   const MOMENTUM_MATRIX: Record<string, number[]> = {
     //                  <0.25mi  <0.5mi  <1.0mi  1.0mi+
-    hustle:            [5,       3,      1,      -4],
-    typical:           [3,       2,      1,      -3],
-    easy:              [2,       1,      1,      -2],
+    hustle:            [8,       5,      1,      -6],
+    typical:           [5,       3,      1,      -4],
+    easy:              [3,       2,      1,      -3],
   };
 
   const bonuses = MOMENTUM_MATRIX[paceBucket];
@@ -242,7 +236,7 @@ const getAnchorProximityBonus = (
     venue.latitude, venue.longitude,
     nextPoint.latitude, nextPoint.longitude,
   );
-  return detour <= direct * 1.2 ? 2 : 0;
+  return detour <= direct * 1.2 ? 3 : 0;
 };
 
 // #endregion
@@ -466,7 +460,7 @@ const computeScheduleArrays = (
         if (matchingPeriod) {
           const closeRaw = parseInt(matchingPeriod.closeTime.slice(0, 2)) +
                            parseInt(matchingPeriod.closeTime.slice(2, 4)) / 60;
-          const closeHour = closeRaw === 0 ? 24 : closeRaw;
+          const closeHour = closeRaw < 6 ? closeRaw + 24 : closeRaw;
           // Even a hustle-pace visit would run past closing — not viable
           isViable = (projectedArrivalHour + minDurHours) <= closeHour;
         } else {
@@ -506,10 +500,8 @@ const selectAnchors = (
   const start = parseTime(startTime);
   const end   = parseTime(endTime);
   const dayHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-  const hourBucket = dayHours < 4 ? 0 : dayHours < 8 ? 1 : 2;
 
-  const paceBucket = getPaceBucket(pace);
-  const anchorCount = ANCHOR_COUNTS[paceBucket][hourBucket];
+  const anchorCount = Math.max(1, Math.ceil(dayHours / 4));
 
   // Identify highest selected depth bucket
   const effectiveDepth = depth.length === 0 ? DEPTH_PRIORITY : depth;
@@ -620,7 +612,7 @@ const computeGaps = (
 
 const fillGap = (
   gap: Gap,
-  candidates: Venue[],
+  candidates: CachedVenue[],
   routeOrigin: { latitude: number; longitude: number },
   pace: string,
   venuePreferences: Record<string, "love" | "hate" | "neutral">,
@@ -649,12 +641,30 @@ const fillGap = (
   // Seed initial route with nearest venues to the gap midpoint
   const midLat = (gap.prevPoint.latitude  + gap.nextPoint.latitude)  / 2;
   const midLng = (gap.prevPoint.longitude + gap.nextPoint.longitude) / 2;
-  const sorted = [...candidates].sort((a, b) =>
-    haversineDistance(midLat, midLng, a.latitude, a.longitude) -
-    haversineDistance(midLat, midLng, b.latitude, b.longitude)
-  );
+  
+  const toVenue = (v: CachedVenue): Venue => ({
+    name: v.name,
+    latitude: v.latitude,
+    longitude: v.longitude,
+    address: v.address,
+    justification: "",
+    hours: v.placeHours?.weekdayText ?? [],
+    placeId: v.placeId,
+    placeHours: v.placeHours ?? undefined,
+    types: v.types,
+    venueType: v.venueType ?? undefined,
+    priceLevel: v.priceLevel ?? null,
+    normalizedReviewScore: v.normalizedReviewScore ?? undefined,
+    venueGravity: v.venueGravity ?? undefined,
+    pending: false,
+  });
 
-  // Single slot — nearest neighbor is optimal, no annealing needed
+  const sorted = [...candidates]
+    .sort((a, b) =>
+      haversineDistance(midLat, midLng, a.latitude, a.longitude) -
+      haversineDistance(midLat, midLng, b.latitude, b.longitude)
+    )
+    .map(toVenue);
   if (fillSlots === 1) return sorted.slice(0, 1);
   let current = sorted.slice(0, fillSlots);
 
@@ -699,7 +709,7 @@ const fillGap = (
       } else if (rand < 0.65) {
         candidate = perturbMove(current);
       } else if (rand < 0.99 && current.length < fillSlots) {
-        candidate = perturbInsert(current, candidates);
+        candidate = perturbInsert(current, sorted);
       } else {
         candidate = perturbRemove(
           current, fillSlots, gap.prevPoint, pace, venuePreferences,
@@ -737,6 +747,41 @@ const fillGap = (
     }
     temperature *= COOLING_RATE;
   }
+
+  // Score breakdown for this gap
+  const { arrivalHours: fa, departureHours: fd, gapMinutes: fg, viable: fv } =
+    computeScheduleArrays(best, gap.prevPoint, gapStartTime, pace, travelDay);
+  const fmtH = (h: number) => {
+    const t = Math.round(h * 60);
+    const hh = Math.floor(t / 60);
+    const mm = (t % 60).toString().padStart(2, "0");
+    return `${hh % 12 || 12}:${mm}${hh >= 12 ? "PM" : "AM"}`;
+  };
+  const exitReason = temperature <= MIN_TEMPERATURE ? "cooled"
+    : totalIterations >= MAX_ITERATIONS ? "maxIter"
+    : "noImprove";
+  console.log(`\n--- Gap Fill: ${fmtH(gap.startHour)}-${fmtH(gap.endHour)} | slots=${fillSlots} filled=${best.length} iters=${totalIterations} exit=${exitReason} ---`);
+  console.log(`${"Venue".padEnd(32)} ${"Type".padEnd(20)} ${"Arr".padEnd(8)} ${"Dep".padEnd(8)} ${"TWB".padEnd(5)} ${"LB".padEnd(5)} ${"MB".padEnd(5)} ${"PROX".padEnd(5)} ${"NRS".padEnd(5)} ${"VG".padEnd(5)} ${"GP".padEnd(5)} ${"DP".padEnd(5)} ${"OK".padEnd(4)} ${"TOT"}`);
+  const logRecentTypes: string[] = [];
+  best.forEach((v, i) => {
+    const twb  = getTimeWindowBonus(v.venueType ?? "", fa[i]);
+    const lb   = getLovedBonus(v.venueType ?? "", venuePreferences);
+    const mb   = getMomentumBonus(v, i === 0 ? null : best[i-1], gap.prevPoint, pace);
+    const prox = getAnchorProximityBonus(v, i === 0 ? gap.prevPoint : best[i-1], i < best.length - 1 ? best[i+1] : gap.nextPoint);
+    const nrs  = v.normalizedReviewScore ?? 0;
+    const vg   = (v.venueGravity ?? 0) * 5;
+    const gp   = -computeGapPenalty(i === 0 ? gap.prevPoint : best[i-1], v, fg[i], pace);
+    const dp   = getDiversityPenalty(v.venueType ?? "", logRecentTypes.slice(-2), neutralFraction);
+    const ok   = fv[i] ? "✓" : "✗";
+    const tot  = twb + lb + mb + prox + nrs + vg + gp + dp + (fv[i] ? 0 : -50);
+    console.log(
+      `${v.name.padEnd(32)} ${(v.venueType ?? "").padEnd(20)} ${fmtH(fa[i]).padEnd(8)} ${fmtH(fd[i]).padEnd(8)} ` +
+      `${twb.toFixed(1).padEnd(5)} ${lb.toFixed(1).padEnd(5)} ${mb.toFixed(1).padEnd(5)} ${prox.toFixed(1).padEnd(5)} ` +
+      `${nrs.toFixed(2).padEnd(5)} ${vg.toFixed(2).padEnd(5)} ${gp.toFixed(1).padEnd(5)} ${dp.toFixed(2).padEnd(5)} ` +
+      `${ok.padEnd(4)} ${tot.toFixed(2)}`
+    );
+    if (v.venueType) logRecentTypes.push(v.venueType);
+  });
 
   return best;
 };
@@ -835,10 +880,72 @@ const perturbRemove = (
 
 // #endregion
 
+// #region 2-Opt Segment Cleanup
+
+const twoOptSegment = (
+  venues: Venue[],
+  prevPoint: { latitude: number; longitude: number },
+  startTime: string,
+  pace: string,
+  venuePreferences: Record<string, "love" | "hate" | "neutral">,
+  travelDay: string,
+  neutralFraction: number,
+): Venue[] => {
+  if (venues.length < 3) return venues;
+
+  let best = [...venues];
+  let { arrivalHours, departureHours, gapMinutes, viable } =
+    computeScheduleArrays(best, prevPoint, startTime, pace, travelDay);
+  let bestScore = routeScore(
+    best, prevPoint, arrivalHours, departureHours, gapMinutes, viable,
+    pace, venuePreferences, travelDay, neutralFraction,
+  );
+  let bestDist = internalDistance(best);
+  let improved = true;
+
+  while (improved) {
+    improved = false;
+    for (let i = 0; i < best.length - 1; i++) {
+      for (let j = i + 1; j < best.length; j++) {
+        const candidate = [
+          ...best.slice(0, i),
+          ...best.slice(i, j + 1).reverse(),
+          ...best.slice(j + 1),
+        ];
+        const candDist = internalDistance(candidate);
+        if (candDist >= bestDist) continue;
+
+        const { arrivalHours: ca, departureHours: cd, gapMinutes: cg, viable: cv } =
+          computeScheduleArrays(candidate, prevPoint, startTime, pace, travelDay);
+        const candScore = routeScore(
+          candidate, prevPoint, ca, cd, cg, cv,
+          pace, venuePreferences, travelDay, neutralFraction,
+        );
+
+        if (candScore >= bestScore - 1.0 && cv.every(v => v)) {
+          best = candidate;
+          bestScore = candScore;
+          bestDist = candDist;
+          arrivalHours = ca;
+          departureHours = cd;
+          gapMinutes = cg;
+          viable = cv;
+          improved = true;
+        }
+      }
+    }
+  }
+
+  return best;
+};
+
+// #endregion
+
 // #region optimizeTRAVEL
 
-export const optimizeTRAVEL = (
+export const optimizeTRAVEL = async (
   candidates: Venue[],
+  allFiltered: CachedVenue[],
   routeOrigin: { latitude: number; longitude: number },
   pace: string,
   venuePreferences: Record<string, "love" | "hate" | "neutral">,
@@ -846,32 +953,52 @@ export const optimizeTRAVEL = (
   startTime: string = DEFAULT_START_TIME,
   endTime: string = DEFAULT_END_TIME,
   depth: string[] = [],
-): Venue[] => {
+): Promise<Venue[]> => {
 
   const neutralFraction = computeNeutralFraction(candidates, venuePreferences);
 
   // Phase 1 — Anchor Selection
   const anchors = selectAnchors(candidates, depth, pace, venuePreferences, startTime, endTime);
   console.log("anchors selected:", anchors.map(a => `${a.name} (${a.venueType}, REV=${(a.normalizedReviewScore ?? 0).toFixed(2)})`));
+  await new Promise(resolve => setTimeout(resolve, 0));
 
   // Phase 2 — Gap Computation
   const gaps = computeGaps(anchors, routeOrigin, pace, startTime, endTime);
   console.log("gaps computed:", gaps.map(g => `${g.startHour.toFixed(2)}-${g.endHour.toFixed(2)}`));
+  await new Promise(resolve => setTimeout(resolve, 0));
 
   // Phase 3 — Gap Filling
   const placedNames = new Set(anchors.map(a => a.name));
   const sharedRecentTypes: string[] = anchors.map(a => a.venueType ?? "");
-  const fillPool = candidates.filter(v => !placedNames.has(v.name));
 
   const filledGaps: Venue[][] = [];
   for (let gi = 0; gi < gaps.length; gi++) {
     const gap = gaps[gi];
-    const gapFillPool = fillPool.filter(v => !filledGaps.flat().some(p => p.name === v.name));    
-    const minGapHours = getVenueDuration("restaurant" as VenueType, "hustle") / 60 + 
+
+    // Build per-gap fill pool from full preference-filtered dataset
+    // filtered by open hours, proximity to gap endpoints, and not already placed
+    const alreadyPlaced = new Set([
+      ...placedNames,
+      ...filledGaps.flat().map(v => v.name),
+    ]);
+    const gapFillPool = filterVenuesForGap(
+      allFiltered,
+      gap.startHour,
+      gap.endHour,
+      gap.prevPoint,
+      gap.nextPoint,
+      travelDay,
+      alreadyPlaced,
+    );
+
+    console.log(`filling gap ${gi + 1}/${gaps.length}: ${gap.startHour.toFixed(2)}-${gap.endHour.toFixed(2)}, pool size: ${gapFillPool.length}`);
+
+    const minGapHours = getVenueDuration("restaurant" as VenueType, "hustle") / 60 +
       estimatedTravelMinutes(gap.prevPoint.latitude, gap.prevPoint.longitude, gap.nextPoint.latitude, gap.nextPoint.longitude, pace) / 60;
-    
+
     if (gapFillPool.length === 0 || (gap.endHour - gap.startHour) < minGapHours) {
       filledGaps.push([]);
+      console.log(`gap ${gi + 1} skipped — too short or no venues`);
       continue;
     }
     
@@ -888,17 +1015,78 @@ export const optimizeTRAVEL = (
     );
     filledGaps.push(filled);
     filled.forEach(v => { if (v.venueType) sharedRecentTypes.push(v.venueType); });
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
 
-  // Assemble final route: fills_pre + anchor1 + fills_inter + anchor2 + fills_post
+  // Assemble final route with 2-opt cleanup per segment
   const route: Venue[] = [];
+  let segmentStartTime = startTime;
+  let segmentPrevPoint = routeOrigin;
+
   for (let i = 0; i < anchors.length; i++) {
-    route.push(...(filledGaps[i] ?? []));
+    const fills = filledGaps[i] ?? [];
+    const optimizedFills = twoOptSegment(
+      fills, segmentPrevPoint, segmentStartTime,
+      pace, venuePreferences, travelDay, neutralFraction,
+    );
+    route.push(...optimizedFills);
     route.push(anchors[i]);
+
+    // Advance segment context to after this anchor
+    const anchorDuration = getVenueDuration(anchors[i].venueType as VenueType, pace);
+    const { departureHours } = computeScheduleArrays(
+      [...optimizedFills, anchors[i]], segmentPrevPoint, segmentStartTime, pace, travelDay,
+    );
+    const anchorDepHour = departureHours[departureHours.length - 1];
+    const anchorDepMins = Math.round(anchorDepHour * 60);
+    const anchorDepHH = Math.floor(anchorDepMins / 60);
+    const anchorDepMM = (anchorDepMins % 60).toString().padStart(2, "0");
+    segmentStartTime = `${anchorDepHH % 12 || 12}:${anchorDepMM} ${anchorDepHH >= 12 ? "PM" : "AM"}`;
+    segmentPrevPoint = { latitude: anchors[i].latitude, longitude: anchors[i].longitude };
   }
-  route.push(...(filledGaps[anchors.length] ?? []));
+
+  const lastFills = filledGaps[anchors.length] ?? [];
+  const optimizedLastFills = twoOptSegment(
+    lastFills, segmentPrevPoint, segmentStartTime,
+    pace, venuePreferences, travelDay, neutralFraction,
+  );
+  route.push(...optimizedLastFills);
 
   console.log("final route:", route.map(v => v.name));
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+ // Final route score breakdown
+  const { arrivalHours: fa, departureHours: fd, gapMinutes: fg, viable: fv } =
+    computeScheduleArrays(route, routeOrigin, startTime, pace, travelDay);
+  const fmtH = (h: number) => {
+    const t = Math.round(h * 60);
+    const hh = Math.floor(t / 60);
+    const mm = (t % 60).toString().padStart(2, "0");
+    return `${hh % 12 || 12}:${mm}${hh >= 12 ? "PM" : "AM"}`;
+  };
+  console.log(`\n=== Final Route Score Breakdown ===`);
+  console.log(`${"Venue".padEnd(32)} ${"Type".padEnd(20)} ${"Arr".padEnd(8)} ${"Dep".padEnd(8)} ${"TWB".padEnd(5)} ${"LB".padEnd(5)} ${"MB".padEnd(5)} ${"PROX".padEnd(5)} ${"NRS".padEnd(5)} ${"VG".padEnd(5)} ${"GP".padEnd(5)} ${"DP".padEnd(5)} ${"OK".padEnd(4)} ${"TOT"}`);
+  const finalRecentTypes: string[] = [];
+  route.forEach((v, i) => {
+    const twb  = getTimeWindowBonus(v.venueType ?? "", fa[i]);
+    const lb   = getLovedBonus(v.venueType ?? "", venuePreferences);
+    const mb   = getMomentumBonus(v, i === 0 ? null : route[i-1], routeOrigin, pace);
+    const prox = getAnchorProximityBonus(v, i === 0 ? routeOrigin : route[i-1], i < route.length - 1 ? route[i+1] : null);
+    const nrs  = v.normalizedReviewScore ?? 0;
+    const vg   = (v.venueGravity ?? 0) * 5;
+    const gp   = -computeGapPenalty(i === 0 ? routeOrigin : route[i-1], v, fg[i], pace);
+    const dp   = getDiversityPenalty(v.venueType ?? "", finalRecentTypes.slice(-2), neutralFraction);
+    const ok   = fv[i] ? "✓" : "✗";
+    const tot  = twb + lb + mb + prox + nrs + vg + gp + dp + (fv[i] ? 0 : -50);
+    console.log(
+      `${v.name.padEnd(32)} ${(v.venueType ?? "").padEnd(20)} ${fmtH(fa[i]).padEnd(8)} ${fmtH(fd[i]).padEnd(8)} ` +
+      `${twb.toFixed(1).padEnd(5)} ${lb.toFixed(1).padEnd(5)} ${mb.toFixed(1).padEnd(5)} ${prox.toFixed(1).padEnd(5)} ` +
+      `${nrs.toFixed(2).padEnd(5)} ${vg.toFixed(2).padEnd(5)} ${gp.toFixed(1).padEnd(5)} ${dp.toFixed(2).padEnd(5)} ` +
+      `${ok.padEnd(4)} ${tot.toFixed(2)}`
+    );
+    if (v.venueType) finalRecentTypes.push(v.venueType);
+  });
+  console.log(`===================================\n`);
 
   return route;
 };
