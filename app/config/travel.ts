@@ -495,13 +495,16 @@ const selectAnchors = (
   venuePreferences: Record<string, "love" | "hate" | "neutral">,
   startTime: string,
   endTime: string,
+  travelDay: string,
 ): Venue[] => {
   // Compute available day length
   const start = parseTime(startTime);
   const end   = parseTime(endTime);
   const dayHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
-  const anchorCount = Math.max(1, Math.ceil(dayHours / 4));
+  const paceBucket = getPaceBucket(pace);
+  const divisor = paceBucket === "hustle" ? 3 : paceBucket === "easy" ? 5 : 4;
+  const anchorCount = Math.max(1, Math.ceil(dayHours / divisor));
 
   // Identify highest selected depth bucket
   const effectiveDepth = depth.length === 0 ? DEPTH_PRIORITY : depth;
@@ -514,8 +517,32 @@ const selectAnchors = (
     (v.normalizedReviewScore ?? 0) < range.max
   );
 
+  // Filter anchor pool to venues open during the day window
+  const anchorStartHour = parseTime(startTime).getHours() + parseTime(startTime).getMinutes() / 60;
+  const anchorEndHour = parseTime(endTime).getHours() + parseTime(endTime).getMinutes() / 60;
+  const viableAnchorPool = anchorPool.filter(v => {
+    if (!v.placeHours) return true;
+    const dayName = resolveDay(travelDay);
+    const DAY_NAME_TO_INDEX: Record<string, number> = {
+      "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3,
+      "Thursday": 4, "Friday": 5, "Saturday": 6,
+    };
+    const dayIndex = DAY_NAME_TO_INDEX[dayName];
+    const dayPeriods = v.placeHours.periods.filter(p => p.day === dayIndex);
+    if (dayPeriods.length === 0) return true;
+    const endHour = parseTime(endTime).getHours() + parseTime(endTime).getMinutes() / 60;
+    return dayPeriods.some(p => {
+      const openHour  = parseInt(p.openTime.slice(0, 2))  + parseInt(p.openTime.slice(2, 4))  / 60;
+      const closeRaw  = parseInt(p.closeTime.slice(0, 2)) + parseInt(p.closeTime.slice(2, 4)) / 60;
+      const closeHour = closeRaw < 6 ? closeRaw + 24 : closeRaw;
+      return closeHour > anchorStartHour && openHour < anchorEndHour;
+    });
+  });
+
+  console.log("anchor pool venues:", viableAnchorPool.map(v => `${v.name}: ${v.normalizedReviewScore}`).join(", "));
+
   // Score anchor pool
-  const scored = anchorPool.map(v => ({
+  const scored = viableAnchorPool.map(v => ({
     venue: v,
     score: (v.normalizedReviewScore ?? 0) +
            (venuePreferences[v.venueType ?? ""] === "love" ? 0.3 : 0),
@@ -958,7 +985,7 @@ export const optimizeTRAVEL = async (
   const neutralFraction = computeNeutralFraction(candidates, venuePreferences);
 
   // Phase 1 — Anchor Selection
-  const anchors = selectAnchors(candidates, depth, pace, venuePreferences, startTime, endTime);
+  const anchors = selectAnchors(candidates, depth, pace, venuePreferences, startTime, endTime, travelDay);
   console.log("anchors selected:", anchors.map(a => `${a.name} (${a.venueType}, REV=${(a.normalizedReviewScore ?? 0).toFixed(2)})`));
   await new Promise(resolve => setTimeout(resolve, 0));
 
