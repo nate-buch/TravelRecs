@@ -11,15 +11,15 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { DaySelector } from "../../components/DaySelector";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
-import { generateItinerary, generateJustifications, Venue } from "../config/claude";
-import { LEG_COLORS } from "../config/colors";
-import { getDefaultMode, getRouteLegs } from "../config/directions";
-import { formatDuration } from "../config/durations";
-import { getPlaceDetails } from "../config/places";
-import { optimizeRouteFromUser } from "../config/routing";
-import { calculateSchedule, recalculateSchedule } from "../config/schedule";
-import { useAppStore } from "../config/store";
-import { optimizeTRAVEL } from "../config/travel";
+import { generateItinerary, generateJustifications, Venue } from "../../config/claude";
+import { LEG_COLORS } from "../../config/colors";
+import { getDefaultMode, getRouteLegs } from "../../config/directions";
+import { formatDuration } from "../../config/durations";
+import { getPlaceDetails } from "../../config/places";
+import { optimizeRouteFromUser } from "../../config/routing";
+import { calculateSchedule, recalculateSchedule } from "../../config/schedule";
+import { useAppStore } from "../../config/store";
+import { optimizeTRAVEL } from "../../config/travel";
 
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN!);
 
@@ -165,7 +165,6 @@ export default function MapScreen() {
         ? new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\u202F/g, " ")
         : "7:00 AM";
       
-      await new Promise(resolve => setTimeout(resolve, 100));
       const optimized = await optimizeTRAVEL(
         result,
         allFiltered,
@@ -473,7 +472,7 @@ export default function MapScreen() {
               aboveLayerID="allLegsLine"
               style={{
                 textField: ["get", "label"],
-                textSize: 12,
+                textSize: ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 9, 16, 12],
                 textColor: ["get", "color"],
                 textHaloColor: "#ffffff",
                 textHaloWidth: 2,
@@ -514,7 +513,7 @@ export default function MapScreen() {
           aboveLayerID="legLabelsLayer"
           style={{
             textField: ["get", "name"],
-            textSize: 16,
+            textSize: ["interpolate", ["linear"], ["zoom"], 13, 0, 14, 12, 16, 16],
             textColor: ["get", "color"],
             textHaloColor: "#ffffff",
             textHaloWidth: 2,
@@ -533,7 +532,7 @@ export default function MapScreen() {
           aboveLayerID="venueNamesLayer"
           style={{
             textField: ["get", "timeBlock"],
-            textSize: 12,
+            textSize: ["interpolate", ["linear"], ["zoom"], 13, 0, 14, 9, 16, 12],
             textColor: ["get", "color"],
             textHaloColor: "#ffffff",
             textHaloWidth: 2,
@@ -599,7 +598,7 @@ export default function MapScreen() {
           aboveLayerID="pendingQuestionMarks"
           style={{
             textField: ["get", "name"],
-            textSize: 16,
+            textSize: ["interpolate", ["linear"], ["zoom"], 13, 0, 14, 12, 16, 16],
             textColor: PENDING_MARKER_COLOR,
             textHaloColor: "#ffffff",
             textHaloWidth: 2,
@@ -617,7 +616,7 @@ export default function MapScreen() {
           aboveLayerID="pendingNameLabels"
           style={{
             textField: PENDING_MARKER_LABEL,
-            textSize: 13,
+            textSize: ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 10, 16, 13],
             textColor: PENDING_MARKER_COLOR,
             textHaloColor: "#ffffff",
             textHaloWidth: 2,

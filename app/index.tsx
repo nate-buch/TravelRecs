@@ -4,8 +4,8 @@
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { loadPreferences } from "./config/preferences";
-import { useAppStore } from "./config/store";
+import { loadPreferences } from "../config/preferences";
+import { useAppStore } from "../config/store";
 
 export default function Index() {
   const setPreferences = useAppStore(state => state.setPreferences);

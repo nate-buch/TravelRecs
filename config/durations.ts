@@ -1,4 +1,4 @@
-import type { VenueType } from "../../shared/venueTypeMapping";
+import type { VenueType } from "../shared/venueTypeMapping";
 export type { VenueType };
 
 export type Pace = "fast" | "medium" | "slow";

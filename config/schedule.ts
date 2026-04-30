@@ -1,9 +1,9 @@
 // #region Imports
 
+import { parseTime } from "../shared/utilities";
 import { Venue } from "./claude";
 import { RouteLeg } from "./directions";
 import { formatTime, getVenueDuration, roundToQuarter, VenueType } from "./durations";
-import { parseTime } from "../../shared/utilities";
 
 // #endregion
 

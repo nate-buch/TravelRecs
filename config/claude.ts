@@ -24,6 +24,7 @@ export type Venue = {
   venueGravity?: number;
   locked?: boolean;
   pending?: boolean;
+  isAnchor?: boolean;
 };
 
 // #endregion
@@ -58,11 +59,7 @@ export type Venue = {
 
   const allVenues = await getCityVenues("countries/usa/texas/austin");
   const filtered = filterCityVenues(allVenues, venuePreferences, latitude, longitude, budget, depth);
-  
-console.log("venuePreferences at filter time:", JSON.stringify(venuePreferences));
-console.log("filtered count:", filtered.length);
-console.log("sample types:", filtered.slice(0, 10).map(v => `${v.name}: ${v.venueType}`));
-  
+
   const placesList = filtered
     .map((p, i) => {
       const dayName = resolveDay(travelDay);

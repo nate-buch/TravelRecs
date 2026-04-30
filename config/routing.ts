@@ -1,7 +1,7 @@
 // #region Imports
 
 import { Venue } from "./claude";
-import { haversineDistance } from "../../shared/utilities";
+import { haversineDistance } from "../shared/utilities";
 
 // #endregion
 

@@ -1,8 +1,8 @@
 // #region Imports
 
 import { collection, getDocs } from "firebase/firestore";
-import { haversineDistance } from "../../shared/utilities";
-import { VenueType } from "../../shared/venueTypeMapping";
+import { haversineDistance } from "../shared/utilities";
+import { VenueType } from "../shared/venueTypeMapping";
 import { db } from "./firebase";
 import { PlaceHours, resolveDay } from "./places";
 

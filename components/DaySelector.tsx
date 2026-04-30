@@ -1,7 +1,7 @@
 // #region Imports
 
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useAppStore } from "../app/config/store";
+import { useAppStore } from "../config/store";
 
 // #endregion
 

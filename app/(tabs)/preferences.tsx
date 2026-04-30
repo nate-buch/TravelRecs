@@ -6,8 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { loadPreferences, savePreferences } from "../config/preferences";
-import { useAppStore } from "../config/store";
+import { loadPreferences, savePreferences } from "../../config/preferences";
+import { useAppStore } from "../../config/store";
 
 // #endregion
 

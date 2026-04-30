@@ -1,6 +1,7 @@
 // #region Imports
 
-import { haversineDistance } from "../../shared/utilities";
+import { haversineDistance } from "../shared/utilities";
+import { VenueType, getVenueTypeForPlace } from "../shared/venueTypeMapping";
 
 // #endregion
 
@@ -93,8 +94,6 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceHours | nul
 // #endregion
 
 // #region Venue Type Mapping and Filtering
-
-import { VenueType, getVenueTypeForPlace } from "../../shared/venueTypeMapping";
 
 // Hybrid scoring weights — must sum to 1.0
 const SCORE_WEIGHT_RATING    = 0.4;  // venue quality (Google rating / 5.0)

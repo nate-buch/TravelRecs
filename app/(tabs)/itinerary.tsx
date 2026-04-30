@@ -8,13 +8,13 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-nativ
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { DaySelector } from "../../components/DaySelector";
 import { SearchResult, VenueSearchBar } from "../../components/VenueSearchBar";
-import { Venue } from "../config/claude";
-import { LEG_COLORS } from "../config/colors";
-import { getDefaultMode, getRouteLegs } from "../config/directions";
-import { formatDuration, formatTime, roundToQuarter } from "../config/durations";
-import { getDayBar, getHoursForDay, getPlaceDetails, getScheduleConflict } from "../config/places";
-import { recalculateSchedule } from "../config/schedule";
-import { useAppStore } from "../config/store";
+import { Venue } from "../../config/claude";
+import { LEG_COLORS } from "../../config/colors";
+import { getDefaultMode, getRouteLegs } from "../../config/directions";
+import { formatDuration, formatTime, roundToQuarter } from "../../config/durations";
+import { getDayBar, getHoursForDay, getPlaceDetails, getScheduleConflict } from "../../config/places";
+import { recalculateSchedule } from "../../config/schedule";
+import { useAppStore } from "../../config/store";
 import { parseTime } from "../../shared/utilities";
 
 // #endregion
